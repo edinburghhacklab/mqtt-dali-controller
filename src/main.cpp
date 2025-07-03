@@ -35,10 +35,10 @@ static bool lights[256]{};
 #endif
 
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr unsigned int SWITCH_GPIO = 14;
+static constexpr unsigned int SWITCH_GPIO = 17;
 static constexpr unsigned int LED_GPIO = 15;
-static constexpr unsigned int RX_GPIO = 6;
-static constexpr unsigned int TX_GPIO = 8;
+static constexpr unsigned int RX_GPIO = 16;
+static constexpr unsigned int TX_GPIO = 18;
 static bool startup_complete = false;
 static int last_switch_state = LOW;
 
