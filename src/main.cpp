@@ -17,16 +17,18 @@
 
 #include <Arduino.h>
 #include <esp_timer.h>
+#include <CBOR.h>
+#include <CBOR_parsing.h>
+#include <CBOR_streams.h>
+#include <FS.h>
+#include <LittleFS.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 
 #include <array>
-#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-static bool lights[256]{};
 
 #if __has_include("config.h")
 # include "config.h"
@@ -34,13 +36,23 @@ static bool lights[256]{};
 # include "config.h.example"
 #endif
 
+static constexpr auto &FS = LittleFS;
+
+static constexpr uint8_t MAX_ADDR = 63;
+static constexpr uint8_t MAX_LEVEL = 254;
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr unsigned int SWITCH_GPIO = 17;
-static constexpr unsigned int LED_GPIO = 15;
-static constexpr unsigned int RX_GPIO = 16;
-static constexpr unsigned int TX_GPIO = 18;
+static constexpr uint64_t ONE_M = 60 * ONE_S;
+static constexpr unsigned int NUM_SWITCHES = 2;
+static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
+static constexpr unsigned int LED_GPIO = 38;
+static constexpr unsigned int RX_GPIO = 40;
+static constexpr unsigned int TX_GPIO = 21;
+static const std::string filename = "/config.cbor";
+static const std::string backup_filename = "/config.cbor~";
+
 static bool startup_complete = false;
-static int last_switch_state = LOW;
+static std::array<int,NUM_SWITCHES> last_switch_state = {LOW, LOW};
+static std::array<uint64_t,NUM_SWITCHES> last_switch_report_us = {0, 0};
 
 static uint64_t last_wifi_us = 0;
 static bool wifi_up = false;
@@ -51,45 +63,252 @@ static WiFiClient client;
 static PubSubClient mqtt(client);
 static String device_id;
 
-static std::array<uint8_t,256> levels;
-static std::array<uint8_t,256> tx_levels;
-static std::deque<std::string> presets_order;
-static std::unordered_map<std::string, std::array<int,256>> presets;
+struct Config {
+	std::array<bool,MAX_ADDR+1> lights;
+	std::array<std::array<bool,MAX_ADDR+1>,NUM_SWITCHES> switch_lights;
+	std::array<std::string,NUM_SWITCHES> switch_preset;
+	std::unordered_map<std::string, std::array<int,MAX_ADDR+1>> presets;
+
+	bool operator==(const Config &other) {
+		return this->lights == other.lights
+				&& this->switch_lights == other.switch_lights
+				&& this->switch_preset == other.switch_preset
+				&& this->presets == other.presets;
+	}
+
+	inline bool operator!=(const Config &other) { return !(*this == other); }
+};
+static Config current_config;
+static Config saved_config;
+static bool config_saved = false;
+
+static std::array<uint8_t,MAX_ADDR+1> levels;
+static std::array<uint8_t,MAX_ADDR+1> tx_levels;
+
+namespace cbor = qindesign::cbor;
+
+static bool read_config(cbor::Reader &reader) {
+
+	return true;
+}
+
+static bool read_config(const std::string &filename, bool load) {
+	ESP_LOGE("config", "Reading config file %s", filename.c_str());
+	const char mode[2] = {'r', '\0'};
+	auto file = FS.open(filename.c_str(), mode);
+	if (file) {
+		cbor::Reader reader{file};
+
+		if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag)
+				|| !reader.isWellFormed()) {
+			ESP_LOGE("config", "Failed to parse config file %s", filename.c_str());
+			return false;
+		} else {
+			if (load) {
+				ESP_LOGE("config", "Loading config from file ", filename.c_str());
+				file.seek(0);
+
+				if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag))
+					return false;
+
+				return read_config(reader);
+			}
+			return true;
+		}
+	} else {
+		ESP_LOGE("config", "Config file %s does not exist", filename.c_str());
+		return false;
+	}
+}
+
+static void load_config() {
+	if (!read_config(filename, true)) {
+		read_config(backup_filename, true);
+	} else {
+		saved_config = current_config;
+		config_saved = true;
+	}
+}
+
+static void writeText(cbor::Writer &writer, const std::string &value) {
+	writer.beginText(value.length());
+	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), value.length());
+}
+
+static void write_config(cbor::Writer &writer) {
+	std::string key;
+
+	writer.beginMap(3);
+
+	writeText(writer, "lights");
+	writer.beginArray(MAX_ADDR+1);
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		writer.writeBoolean(current_config.lights[i]);
+	}
+
+	writeText(writer, "switches");
+	writer.beginArray(NUM_SWITCHES);
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		writer.beginMap(2);
+
+		writeText(writer, "lights");
+		writer.beginArray(MAX_ADDR+1);
+		for (unsigned int j = 0; j <= MAX_ADDR; j++) {
+			writer.writeBoolean(current_config.switch_lights[i][j]);
+		}
+
+		writeText(writer, "preset");
+		writeText(writer, current_config.switch_preset[i]);
+	}
+
+	writeText(writer, "presets");
+	writer.beginArray(current_config.presets.size());
+	for (const auto &preset : current_config.presets) {
+		writer.beginMap(2);
+
+		writeText(writer, "name");
+		writeText(writer, preset.first);
+
+		writeText(writer, "levels");
+		writer.beginArray(MAX_ADDR+1);
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			writer.writeInt(preset.second[i]);
+		}
+	}
+}
+
+static bool write_config(const std::string &filename) {
+	ESP_LOGE("config", "Writing config file %s", filename.c_str());
+	const char mode[2] = {'w', '\0'};
+	auto file = FS.open(filename.c_str(), mode);
+	if (file) {
+		cbor::Writer writer{file};
+
+		writer.writeTag(cbor::kSelfDescribeTag);
+		write_config(writer);
+
+		if (file.getWriteError()) {
+			ESP_LOGE("config", "Failed to write config file %s: %d", filename.c_str(), file.getWriteError());
+			if (wifi_up && mqtt.connected()) {
+				mqtt.publish("irc/send", (std::string{"{\"to\": \""}
+					+ IRC_CHANNEL + "\", \"message\": \""
+					+ MQTT_TOPIC + ": Failed to write config file " + filename
+					+ ": " + std::to_string(file.getWriteError())
+					+ "\"}").c_str());
+			}
+			return false;
+		} else {
+			return true;
+		}
+	} else {
+		ESP_LOGE("config", "Unable to open config file %s for writing", filename.c_str());
+		if (wifi_up && mqtt.connected()) {
+			mqtt.publish("irc/send", (std::string{"{\"to\": \""}
+				+ IRC_CHANNEL + "\", \"message\": \""
+				+ MQTT_TOPIC + ": Unable to open config file " + filename + " for writing"
+				+ "\"}").c_str());
+		}
+		return false;
+	}
+}
+
+static void save_config() {
+	if (!startup_complete) {
+		return;
+	}
+
+	if (config_saved && saved_config == current_config) {
+		return;
+	}
+
+	if (write_config(filename)) {
+		if (read_config(filename, false)) {
+			if (write_config(backup_filename)) {
+				saved_config = current_config;
+				config_saved = true;
+			}
+		}
+	}
+}
+
+static void configure_addresses(int switch_id, std::string addresses) {
+	if (switch_id == -1) {
+		ESP_LOGE("lights", "Configure light addresses");
+		current_config.lights.fill(false);
+	} else {
+		ESP_LOGE("lights", "Configure light switch addresses");
+		current_config.switch_lights[switch_id].fill(false);
+	}
+
+	while (addresses.length() >= 2) {
+		unsigned int address = 0;
+
+		if (addresses[0] >= '0' && addresses[0] <= '9') {
+			address |= (addresses[0] - '0') << 4;
+		} else if (addresses[0] >= 'A' && addresses[0] <= 'F') {
+			address |= (addresses[0] - 'A' + 10) << 4;
+		}
+
+		if (addresses[1] >= '0' && addresses[1] <= '9') {
+			address |= addresses[1] - '0';
+		} else if (addresses[1] >= 'A' && addresses[1] <= 'F') {
+			address |= addresses[1] - 'A' + 10;
+		}
+
+		if (address <= MAX_ADDR) {
+			if (switch_id == -1) {
+				ESP_LOGE("lights", "Light %u added", address);
+				current_config.lights[address] = true;
+			} else {
+				ESP_LOGE("lights", "Light %u added to switch %u", address, switch_id);
+				current_config.switch_lights[switch_id][address] = true;
+			}
+		}
+
+		addresses = addresses.substr(2);
+	}
+
+	save_config();
+}
 
 static void configure_preset(const std::string &name, int light_id, int level) {
 	static constexpr size_t MAX_PRESETS = 50;
-	const auto it = presets.find(name);
+	const auto it = current_config.presets.find(name);
 
-	if (light_id < 0 || light_id > 255) {
+	if (light_id < 0 || light_id > MAX_ADDR) {
 		return;
 	}
 
-	if (level < 0 || level > 255) {
+	if (level < 0 || level > MAX_ADDR) {
 		return;
 	}
 
-	if (it == presets.cend()) {
-		if (presets_order.size() == MAX_PRESETS) {
-			presets.erase(presets_order[0]);
-			presets_order.pop_front();
+	if (name == "off") {
+		return;
+	}
+
+	if (it == current_config.presets.cend()) {
+		if (current_config.presets.size() == MAX_PRESETS) {
+			return;
 		}
 
-		presets_order.push_back(name);
-
-		std::array<int, 256> levels;
+		std::array<int, MAX_ADDR+1> levels;
 
 		levels[light_id] = level;
-		presets.emplace(name, std::move(levels));
+		current_config.presets.emplace(name, std::move(levels));
+		save_config();
 		return;
 	}
 
 	it->second[light_id] = level;
+	save_config();
 }
 
-static void select_preset(const std::string &name) {
-	const auto it = presets.find(name);
+static void select_preset(const std::string &name,
+		std::array<bool,MAX_ADDR+1> *filter = nullptr) {
+	const auto it = current_config.presets.find(name);
 
-	if (it == presets.cend() && name != "off") {
+	if (it == current_config.presets.cend() && name != "off") {
 		return;
 	}
 
@@ -101,26 +320,40 @@ static void select_preset(const std::string &name) {
 	}
 
 	if (name == "off") {
-		for (int i = 0; i < 256; i++) {
-			levels[i] = 0;
+		for (int i = 0; i < MAX_ADDR; i++) {
+			if (filter == nullptr || filter->at(i)) {
+				levels[i] = 0;
+			}
 		}
 	} else {
-		for (int i = 0; i < 256; i++) {
-			levels[i] = it->second[i];
+		for (int i = 0; i < MAX_ADDR; i++) {
+			if (filter == nullptr || filter->at(i)) {
+				levels[i] = it->second[i];
+			}
 		}
 	}
 }
 
+static void delete_preset(const std::string &name) {
+	const auto it = current_config.presets.find(name);
+
+	if (it == current_config.presets.cend()) {
+		return;
+	}
+
+	current_config.presets.erase(it);
+}
+
 static void set_level(int light_id, int level) {
-	if (light_id < 0 || light_id > 255) {
+	if (light_id < 0 || light_id > MAX_ADDR) {
 		return;
 	}
 
-	if (level < 0 || level > 255) {
+	if (level < 0 || level > MAX_LEVEL) {
 		return;
 	}
 
-	if (!lights[light_id]) {
+	if (!current_config.lights[light_id]) {
 		return;
 	}
 
@@ -135,28 +368,47 @@ static void set_level(int light_id, int level) {
 	levels[light_id] = level;
 }
 
-static void transmit_dali() {
-	static uint64_t last_dali_us = 0;
+static void transmit_dali_one(unsigned int address, unsigned int level) {
+	if (address > MAX_ADDR || level > MAX_LEVEL) {
+		return;
+	}
 
-	if (levels != tx_levels || esp_timer_get_time() - last_dali_us > ONE_S) {
-		// TODO Serial1.write()
+	// TODO
+}
+
+static void transmit_dali_all() {
+	static uint64_t last_dali_us = 0;
+	bool repeat = !last_dali_us || esp_timer_get_time() - last_dali_us >= ONE_S;
+
+	if (repeat || levels != tx_levels) {
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			if (current_config.lights[i]) {
+				if (repeat || levels[i] != tx_levels[i]) {
+					transmit_dali_one(i, levels[i]);
+				}
+			}
+		}
 
 		tx_levels = levels;
-		last_dali_us = esp_timer_get_time();
+		if (repeat) {
+			last_dali_us = esp_timer_get_time();
+		}
 	}
 }
 
 void setup() {
-	configure_lights();
-
-	pinMode(SWITCH_GPIO, INPUT_PULLUP);
+	pinMode(TX_GPIO, OUTPUT);
+	digitalWrite(TX_GPIO, HIGH);
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		pinMode(SWITCH_GPIO[i], INPUT_PULLUP);
+	}
 	pinMode(LED_GPIO, OUTPUT);
 	digitalWrite(LED_GPIO, LOW);
 
 	device_id = String("mqtt-dali-controller_") + String(ESP.getEfuseMac(), HEX);
 
-	digitalWrite(LED_GPIO, LOW);
-	Serial1.begin(1200, SERIAL_8N1, RX_GPIO, TX_GPIO);
+	FS.begin(true);
+	load_config();
 
 	WiFi.persistent(false);
 	WiFi.setAutoReconnect(false);
@@ -167,6 +419,12 @@ void setup() {
 	mqtt.setCallback([] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string startup_topic = std::string{MQTT_TOPIC} + "/startup_complete";
 		static const std::string reboot_topic = std::string{MQTT_TOPIC} + "/reboot";
+		static const std::string reload_topic = std::string{MQTT_TOPIC} + "/reload";
+		static const std::string addresses_topic = std::string{MQTT_TOPIC} + "/addresses";
+		static const std::string switch0_addresses_topic = std::string{MQTT_TOPIC} + "/switch/0/addresses";
+		static const std::string switch1_addresses_topic = std::string{MQTT_TOPIC} + "/switch/1/addresses";
+		static const std::string switch0_preset_topic = std::string{MQTT_TOPIC} + "/switch/0/preset";
+		static const std::string switch1_preset_topic = std::string{MQTT_TOPIC} + "/switch/1/preset";
 		static const std::string preset_prefix = std::string{MQTT_TOPIC} + "/preset/";
 		static const std::string set_prefix = std::string{MQTT_TOPIC} + "/set/";
 		std::string topic_str = topic;
@@ -174,9 +432,26 @@ void setup() {
 		if (topic_str == "meta/mqtt-agents/poll") {
 			mqtt.publish("meta/mqtt-agents/reply", device_id.c_str());
 		} else if (topic_str == startup_topic) {
-			startup_complete = true;
+			if (!startup_complete) {
+				ESP_LOGE("main", "Startup complete");
+				startup_complete = true;
+				save_config();
+			}
 		} else if (topic_str == reboot_topic) {
 			esp_restart();
+		} else if (topic_str == reload_topic) {
+			load_config();
+			save_config();
+		} else if (topic_str == addresses_topic) {
+			configure_addresses(-1, std::string{(const char*)payload, length});
+		} else if (topic_str == switch0_addresses_topic) {
+			configure_addresses(0, std::string{(const char*)payload, length});
+		} else if (topic_str == switch1_addresses_topic) {
+			configure_addresses(1, std::string{(const char*)payload, length});
+		} else if (topic_str == switch0_preset_topic) {
+			current_config.switch_preset[0] = std::string{(const char*)payload, length};
+		} else if (topic_str == switch1_preset_topic) {
+			current_config.switch_preset[1] = std::string{(const char*)payload, length};
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
 			auto idx = preset_name.find("/");
@@ -187,8 +462,13 @@ void setup() {
 				std::string light_id = preset_name.substr(idx + 1);
 
 				preset_name = preset_name.substr(0, idx);
-				configure_preset(preset_name, atoi(light_id.c_str()),
-					atoi(std::string{(const char *)payload, length}.c_str()));
+
+				if (light_id == "delete") {
+					delete_preset(preset_name);
+				} else {
+					configure_preset(preset_name, atoi(light_id.c_str()),
+						atoi(std::string{(const char *)payload, length}.c_str()));
+				}
 			}
 		} else if (topic_str.rfind(set_prefix, 0) == 0) {
 			std::string light_id = topic_str.substr(set_prefix.length());
@@ -200,26 +480,43 @@ void setup() {
 }
 
 void loop() {
-	if (startup_complete) {
-		int switch_state = digitalRead(SWITCH_GPIO);
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		int switch_state = current_config.switch_preset[i].empty() ? LOW : digitalRead(SWITCH_GPIO[i]);
 
-		digitalWrite(LED_GPIO, switch_state == LOW ? HIGH : LOW);
-
-		if (switch_state != last_switch_state) {
-			last_switch_state = switch_state;
+		if (switch_state != last_switch_state[i]) {
+			last_switch_state[i] = switch_state;
 
 			if (wifi_up && mqtt.connected()) {
+				std::string name = (i == 0 ? "Left light" : "Right light");
+
+				if (i == 0 && current_config.switch_preset[1].empty()) {
+					name = "Light";
+				}
+
+				mqtt.publish((std::string{MQTT_TOPIC}
+					+ "/switch/" + std::to_string(i) + "/state").c_str(),
+					switch_state == LOW ? "1" : "0",
+					true);
+				last_switch_report_us[i] = esp_timer_get_time();
+
 				mqtt.publish("irc/send", (std::string{"{\"to\": \""}
 					+ IRC_CHANNEL + "\", \"message\": \""
-					+ MQTT_TOPIC + ": Light switch "
+					+ MQTT_TOPIC + ": " + name + " switch "
 					+ (switch_state == LOW ? "ON" : "OFF")
-					+ " (levels reset to comfort)\"}").c_str());
-				select_preset("comfort");
+					+ " (levels reset to " + current_config.switch_preset[i] + ")\"}").c_str());
 			}
+			select_preset(current_config.switch_preset[i], &current_config.switch_lights[i]);
+		} else if (last_switch_report_us[i]
+				&& esp_timer_get_time() - last_switch_report_us[i] >= ONE_M) {
+			mqtt.publish((std::string{MQTT_TOPIC}
+					+ "/switch/" + std::to_string(i) + "/state").c_str(),
+					last_switch_state[i] == LOW ? "1" : "0",
+					true);
+			last_switch_report_us[i] = esp_timer_get_time();
 		}
-
-		transmit_dali();
 	}
+
+	transmit_dali_all();
 
 	switch (WiFi.status()) {
 	case WL_IDLE_STATUS:
@@ -228,7 +525,7 @@ void loop() {
 	case WL_CONNECTION_LOST:
 	case WL_DISCONNECTED:
 		if (!last_wifi_us || wifi_up || esp_timer_get_time() - last_wifi_us > 30 * ONE_S) {
-			Serial.println("WiFi reconnect");
+			ESP_LOGE("network", "WiFi reconnect");
 			WiFi.disconnect();
 			WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 			last_wifi_us = esp_timer_get_time();
@@ -238,7 +535,7 @@ void loop() {
 
 	case WL_CONNECTED:
 		if (!wifi_up) {
-			Serial.println("WiFi connected");
+			ESP_LOGE("network", "WiFi connected");
 			wifi_up = true;
 		}
 		break;
@@ -252,21 +549,27 @@ void loop() {
 
 	if (wifi_up) {
 		if (!mqtt.connected() && (!last_mqtt_us || esp_timer_get_time() - last_mqtt_us > ONE_S)) {
-			Serial.println("MQTT connecting");
+			ESP_LOGE("network", "MQTT connecting");
 			mqtt.connect(device_id.c_str());
 
 			if (mqtt.connected()) {
-				Serial.println("MQTT connected");
+				ESP_LOGE("network", "MQTT connected");
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/reboot").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/reload").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/startup_complete").c_str());
 				mqtt.subscribe("meta/mqtt-agents/poll");
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/addresses").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/addresses").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/addresses").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/preset").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/preset").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/preset/+").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/preset/+/+").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/set/+").c_str());
 				mqtt.publish("meta/mqtt-agents/announce", device_id.c_str());
 				mqtt.publish((std::string{MQTT_TOPIC} + "/startup_complete").c_str(), "");
 			} else {
-				Serial.println("MQTT connection failed");
+				ESP_LOGE("network", "MQTT connection failed");
 			}
 		}
 	}
