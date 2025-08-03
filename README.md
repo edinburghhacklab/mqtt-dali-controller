@@ -49,8 +49,8 @@ and then every 60 seconds.
 Up to 50 presets can be configured, setting an empty value to skip that light:
 
 ```
-dali/preset/comfort/<0-63>[-<0-63>],... <0-254>
-dali/preset/comfort/<0-63>[-<0-63>],... (null)
+dali/preset/<name>/<0-63>[-<0-63>],... <0-254>
+dali/preset/<name>/<0-63>[-<0-63>],... (null)
 ```
 
 The reserved preset names `off`, `custom` and `unknown` can't be configured.
@@ -70,8 +70,10 @@ long as one or more lights were last set using that preset.
 Remove a preset:
 
 ```
-dali/preset/comfort/delete (null)
+dali/preset/<name>/delete (null)
 ```
+
+### Usage
 
 Set individual lights:
 
@@ -82,7 +84,7 @@ dali/set/<0-63>[-<0-63>],... <0-254>
 Select preset:
 
 ```
-dali/preset/comfort (null)
+dali/preset/<name> (null)
 ```
 
 ### Miscellaneous
