@@ -142,7 +142,7 @@ static void publish_active_presets() {
 		bool last_active = last_active_presets.find(preset) != last_active_presets.end();
 
 		if (force || (is_active != last_active)) {
-			network.publish((std::string{MQTT_TOPIC} + "/preset/" + preset + "/active").c_str(), is_active ? "1" : "0", true);
+			network.publish(std::string{MQTT_TOPIC} + "/preset/" + preset + "/active", is_active ? "1" : "0", true);
 		}
 
 		if (is_active) {
@@ -305,8 +305,8 @@ void loop() {
 					name += std::to_string(i);
 				}
 
-				network.publish((std::string{MQTT_TOPIC}
-					+ "/switch/" + std::to_string(i) + "/state").c_str(),
+				network.publish(std::string{MQTT_TOPIC}
+					+ "/switch/" + std::to_string(i) + "/state",
 					switch_state[i].value == LOW ? "1" : "0",
 					true);
 				switch_state[i].report_us = esp_timer_get_time();
@@ -321,8 +321,7 @@ void loop() {
 			select_preset(preset, &lights);
 		} else if (switch_state[i].report_us
 				&& esp_timer_get_time() - switch_state[i].report_us >= ONE_M) {
-			network.publish((std::string{MQTT_TOPIC}
-					+ "/switch/" + std::to_string(i) + "/state").c_str(),
+			network.publish(std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i) + "/state",
 					switch_state[i].value == LOW ? "1" : "0",
 					true);
 			switch_state[i].report_us = esp_timer_get_time();

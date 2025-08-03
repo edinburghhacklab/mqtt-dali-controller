@@ -192,7 +192,7 @@ bool Config::read_config(const std::string &filename, bool load) {
 
 				if (read_config(reader)) {
 					ESP_LOGE("config", "Loaded config from file %s", filename.c_str());
-					network_.publish((std::string{MQTT_TOPIC} + "/loaded_config").c_str(),
+					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config",
 						filename + " " + std::to_string(file.size()));
 				} else {
 					ESP_LOGE("config", "Invalid config file %s", filename.c_str());
@@ -518,7 +518,7 @@ bool Config::write_config(const std::string &filename) {
 		auto file = FS.open(filename.c_str(), mode);
 		if (file) {
 			ESP_LOGE("config", "Saved config to file %s", filename.c_str());
-			network_.publish((std::string{MQTT_TOPIC} + "/saved_config").c_str(),
+			network_.publish(std::string{MQTT_TOPIC} + "/saved_config",
 				filename + " " + std::to_string(file.size()));
 			return true;
 		} else {
@@ -574,16 +574,15 @@ void Config::write_config(cbor::Writer &writer) {
 }
 
 void Config::publish_config() {
-	network_.publish((std::string{MQTT_TOPIC} + "/addresses").c_str(),
-		addresses_text(current_.lights).c_str(), true);
+	network_.publish(std::string{MQTT_TOPIC} + "/addresses",
+		addresses_text(current_.lights), true);
 
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		network_.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
-			+ "/name").c_str(), current_.switches[i].name.c_str(), true);
-		network_.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
-			+ "/addresses").c_str(), addresses_text(current_.switches[i].lights).c_str(), true);
-		network_.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
-			+ "/preset").c_str(), current_.switches[i].preset.c_str(), true);
+		auto switch_prefix = std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i);
+
+		network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
+		network_.publish(switch_prefix + "/addresses", addresses_text(current_.switches[i].lights), true);
+		network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
 	}
 
 	for (const auto &preset : current_.presets) {
@@ -592,8 +591,8 @@ void Config::publish_config() {
 }
 
 void Config::publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
-	network_.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
-		preset_levels_text(levels, false).c_str(), true);
+	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels",
+		preset_levels_text(levels, false), true);
 }
 
 std::bitset<MAX_ADDR+1> Config::get_addresses() {
@@ -861,8 +860,8 @@ void Config::delete_preset(const std::string &name) {
 	network_.report("presets", std::string{"Preset "} + name + ": " + preset_levels_text(it->second, true) + " (deleted)");
 
 	current_.presets.erase(it);
-	network_.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/active").c_str(), "", true);
-	network_.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(), "", true);
+	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/active", "", true);
+	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
 }
 
 
