@@ -84,6 +84,7 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 		} else {
 			levels_[i] = 0;
 			if (!active_presets_[i].empty()) {
+				republish_presets_.insert(active_presets_[i]);
 				active_presets_[i] = "";
 			}
 		}
@@ -132,12 +133,12 @@ void Lights::publish_active_presets() {
 
 	for (const auto &group : groups) {
 		const auto lights = config_.get_group_addresses(group);
-		bool republish = republish_groups_.find(group) != republish_groups_.end();
+		bool republish_group = republish_groups_.find(group) != republish_groups_.end();
 
 		for (const auto &preset : presets) {
-			republish |= republish_presets_.find(preset) != republish_presets_.end();
+			bool republish_preset = republish_presets_.find(preset) != republish_presets_.end();
 
-			if (republish) {
+			if (republish_group || republish_preset) {
 				bool is_active = false;
 
 				for (unsigned int i = 0; i <= MAX_ADDR; i++) {
