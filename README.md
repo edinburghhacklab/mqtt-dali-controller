@@ -42,11 +42,14 @@ dali/switch/<0-1>/preset <name>
 Light switch status is reported as `dali/switch/<0-1>/state` when it changes
 and then every 60 seconds.
 
-Up to 50 presets can be configured:
+Up to 50 presets can be configured, setting an empty value to skip that light:
 
 ```
-dali/preset/comfort/<0-63> <0-254> (retain)
+dali/preset/comfort/<0-63> <0-254>
+dali/preset/comfort/<0-63> (null)
 ```
+
+The builtin preset names `off` and `custom` can't be configured.
 
 Remove a preset:
 

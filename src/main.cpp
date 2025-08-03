@@ -48,9 +48,10 @@ static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 static constexpr unsigned int LED_GPIO = 38;
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
+static const std::string BUILTIN_PRESET_OFF = "off";
+static const std::string BUILTIN_PRESET_CUSTOM = "custom";
 static const std::string filename = "/config.cbor";
 static const std::string backup_filename = "/config.cbor~";
-
 
 struct SwitchState {
 	SwitchState() : value(LOW), report_us(0) {}
@@ -319,11 +320,11 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 		return;
 	}
 
-	if (level < 0 || level > MAX_ADDR) {
+	if (level < -1 || level > MAX_ADDR) {
 		return;
 	}
 
-	if (name == "off") {
+	if (name == BUILTIN_PRESET_OFF || name == BUILTIN_PRESET_CUSTOM) {
 		return;
 	}
 
@@ -334,6 +335,7 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 
 		std::array<int, MAX_ADDR+1> levels;
 
+		levels.fill(-1);
 		levels[light_id] = level;
 		current_config.presets.emplace(name, std::move(levels));
 		save_config();
@@ -348,13 +350,13 @@ static void select_preset(const std::string &name,
 		std::array<bool,MAX_ADDR+1> *filter = nullptr) {
 	const auto it = current_config.presets.find(name);
 
-	if (it == current_config.presets.cend() && name != "off") {
+	if (it == current_config.presets.cend() && name != BUILTIN_PRESET_OFF) {
 		return;
 	}
 
 	report("lights", std::string{"Preset - "} + name);
 
-	if (name == "off") {
+	if (name == BUILTIN_PRESET_OFF) {
 		for (int i = 0; i < MAX_ADDR; i++) {
 			if (filter == nullptr || filter->at(i)) {
 				levels[i] = 0;
@@ -362,8 +364,10 @@ static void select_preset(const std::string &name,
 		}
 	} else {
 		for (int i = 0; i < MAX_ADDR; i++) {
-			if (filter == nullptr || filter->at(i)) {
-				levels[i] = it->second[i];
+			if (it->second[i] != -1) {
+				if (filter == nullptr || filter->at(i)) {
+					levels[i] = it->second[i];
+				}
 			}
 		}
 	}
@@ -500,8 +504,13 @@ void setup() {
 				if (light_id == "delete") {
 					delete_preset(preset_name);
 				} else {
-					configure_preset(preset_name, atoi(light_id.c_str()),
-						atoi(std::string{(const char *)payload, length}.c_str()));
+					int value = -1;
+
+					if (payload[0]) {
+						value = atoi(std::string{(const char *)payload, length}.c_str());
+					}
+
+					configure_preset(preset_name, atoi(light_id.c_str()), value);
 				}
 			}
 		} else if (topic_str.rfind(set_prefix, 0) == 0) {
