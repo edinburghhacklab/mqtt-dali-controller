@@ -26,6 +26,10 @@
 #include <WiFi.h>
 
 #include <array>
+#include <cstdlib>
+#include <iostream>
+#include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -358,13 +362,70 @@ static bool valid_preset_name(const std::string &name) {
 	return true;
 }
 
-static void configure_preset(const std::string &name, int light_id, int level) {
-	const auto it = current_config.presets.find(name);
+static std::set<unsigned int> parse_light_ids(const std::string &light_id) {
+	std::istringstream input{light_id};
+	std::string item;
+	std::set<unsigned int> light_ids;
 
-	if (light_id < 0 || light_id > MAX_ADDR) {
-		return;
+	while (std::getline(input, item, ',')) {
+		auto dash_idx = item.find('-');
+		unsigned long begin, end;
+
+		if (item == "all") {
+			begin = 0;
+			end = MAX_ADDR;
+		} else if (dash_idx == std::string::npos) {
+			char *endptr = nullptr;
+
+			begin = end = std::strtoul(item.c_str(), &endptr, 10);
+			if (item.empty() || !endptr || endptr[0]) {
+				continue;
+			}
+		} else {
+			std::string second = item.substr(dash_idx + 1);
+
+			item.resize(dash_idx);
+
+			{
+				char *endptr = nullptr;
+
+				begin = std::strtoul(item.c_str(), &endptr, 10);
+				if (item.empty() || !endptr || endptr[0]) {
+					continue;
+				}
+			}
+
+			{
+				char *endptr = nullptr;
+
+				end = std::strtoul(second.c_str(), &endptr, 10);
+				if (second.empty() || !endptr || endptr[0]) {
+					continue;
+				}
+			}
+		}
+
+		if (begin > end) {
+			continue;
+		}
+
+		if (begin > MAX_ADDR) {
+			continue;
+		}
+
+		if (end > MAX_ADDR) {
+			continue;
+		}
+
+		for (unsigned long i = begin; i <= end; i++) {
+			light_ids.insert(i);
+		}
 	}
 
+	return light_ids;
+}
+
+static void configure_preset(const std::string &name, const std::string &lights, long level) {
 	if (level < -1 || level > MAX_LEVEL) {
 		return;
 	}
@@ -372,6 +433,9 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 	if (!valid_preset_name(name)) {
 		return;
 	}
+
+	auto light_ids = parse_light_ids(lights);
+	const auto it = current_config.presets.find(name);
 
 	if (it == current_config.presets.cend()) {
 		if (current_config.presets.size() == MAX_PRESETS) {
@@ -381,14 +445,18 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 		std::array<int, MAX_ADDR+1> levels;
 
 		levels.fill(-1);
-		levels[light_id] = level;
+		for (unsigned int light_id : light_ids) {
+			levels[light_id] = level;
+		}
 		current_config.presets.emplace(name, levels);
 		save_config();
 		publish_preset(name, levels);
 		return;
 	}
 
-	it->second[light_id] = level;
+	for (unsigned int light_id : light_ids) {
+		it->second[light_id] = level;
+	}
 	save_config();
 	publish_preset(it->first, it->second);
 }
@@ -401,7 +469,7 @@ static void select_preset(const std::string &name,
 		return;
 	}
 
-	report("lights", std::string{"Preset - "} + name);
+	report("lights", std::string{"Preset = "} + name);
 
 	if (name == BUILTIN_PRESET_OFF) {
 		for (int i = 0; i < MAX_ADDR; i++) {
@@ -436,26 +504,51 @@ static void delete_preset(const std::string &name) {
 	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(), "", true);
 }
 
-static void set_level(int light_id, int level) {
-	if (light_id < 0 || light_id > MAX_ADDR) {
-		return;
-	}
-
+static void set_level(const std::string &lights, long level) {
 	if (level < 0 || level > MAX_LEVEL) {
 		return;
 	}
 
-	if (!current_config.lights[light_id]) {
+	auto light_ids = parse_light_ids(lights);
+	std::string prefix = "Light ";
+	std::string list = "";
+	unsigned int total = 0;
+	unsigned int changed = 0;
+
+	for (unsigned int i = 0; i < MAX_ADDR; i++) {
+		if (current_config.lights[i]) {
+			total++;
+		}
+	}
+
+	for (int light_id : light_ids) {
+		if (!current_config.lights[light_id]) {
+			continue;
+		}
+
+		if (!list.empty()) {
+			prefix = "Lights ";
+			list += ",";
+		}
+
+		list += "#" + std::to_string(light_id);
+
+		levels[light_id] = level;
+		active_presets[light_id] = RESERVED_PRESET_CUSTOM;
+		republish_active_presets = true;
+		changed++;
+	}
+
+	if (!changed) {
 		return;
 	}
 
-	report("lights", std::string{"Light #"}
-			+ std::to_string(light_id) + " - "
-			+ std::to_string(level));
+	if (total == changed) {
+		prefix = "All";
+		list = "";
+	}
 
-	levels[light_id] = level;
-	active_presets[light_id] = RESERVED_PRESET_CUSTOM;
-	republish_active_presets = true;
+	report("lights", prefix + list + " = " + std::to_string(level));
 }
 
 static void publish_active_presets() {
@@ -604,21 +697,33 @@ void setup() {
 
 				if (light_id == "delete") {
 					delete_preset(preset_name);
-				} else if (light_id[0] >= '0' && light_id[0] <= '9') {
-					int value = -1;
+				} else if (light_id == "all" || (light_id[0] >= '0' && light_id[0] <= '9')) {
+					long value = -1;
 
 					if (length) {
-						value = atoi(std::string{(const char *)payload, length}.c_str());
+						std::string payload_copy = std::string{(const char *)payload, length};
+						char *endptr = nullptr;
+
+						value = std::strtol(payload_copy.c_str(), &endptr, 10);
+						if (!endptr || endptr[0]) {
+							return;
+						}
 					}
 
-					configure_preset(preset_name, atoi(light_id.c_str()), value);
+					configure_preset(preset_name, light_id, value);
 				}
 			}
 		} else if (topic_str.rfind(set_prefix, 0) == 0) {
 			std::string light_id = topic_str.substr(set_prefix.length());
+			std::string payload_copy = std::string{(const char *)payload, length};
+			char *endptr = nullptr;
 
-			set_level(atoi(light_id.c_str()),
-				atoi(std::string{(const char *)payload, length}.c_str()));
+			long value = std::strtol(payload_copy.c_str(), &endptr, 10);
+			if (!length || !endptr || endptr[0]) {
+				return;
+			}
+
+			set_level(light_id, value);
 		}
 	});
 }
