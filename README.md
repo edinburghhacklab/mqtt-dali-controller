@@ -34,11 +34,10 @@ dali/addresses [<00-3F>...]
 Configure which light switches are present by listing the lights as uppercase
 hexadecimal values and configuring the default preset:
 ```
+dali/switch/<0-1>/name [name]
 dali/switch/<0-1>/addresses [<00-3F>...]
 dali/switch/<0-1>/preset <name>
 ```
-(If there are two switches configured, switch 0 is the "left" switch and
-switch 1 is the "right" switch.)
 
 Light switch status is reported as `dali/switch/<0-1>/state` when it changes
 and then every 60 seconds.

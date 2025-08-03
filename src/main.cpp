@@ -72,12 +72,14 @@ static PubSubClient mqtt(client);
 static String device_id;
 
 struct SwitchConfig {
+	std::string name;
 	std::array<bool,MAX_ADDR+1> lights;
 	std::string preset;
 
 	bool operator==(const SwitchConfig &other) const {
-		return this->lights == other.lights
-				&& this->preset == other.preset;
+		return this->name == other.name
+			&& this->lights == other.lights
+			&& this->preset == other.preset;
 	}
 
 	inline bool operator!=(const SwitchConfig &other) const { return !(*this == other); }
@@ -90,8 +92,8 @@ struct Config {
 
 	bool operator==(const Config &other) const {
 		return this->lights == other.lights
-				&& this->switches == other.switches
-				&& this->presets == other.presets;
+			&& this->switches == other.switches
+			&& this->presets == other.presets;
 	}
 
 	inline bool operator!=(const Config &other) const { return !(*this == other); }
@@ -196,7 +198,10 @@ static void write_config(cbor::Writer &writer) {
 	writeText(writer, "switches");
 	writer.beginArray(NUM_SWITCHES);
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		writer.beginMap(2);
+		writer.beginMap(3);
+
+		writeText(writer, "name");
+		writeText(writer, current_config.switches[i].name);
 
 		writeText(writer, "lights");
 		writer.beginArray(MAX_ADDR+1);
@@ -443,40 +448,43 @@ void setup() {
 
 	mqtt.setServer(MQTT_HOSTNAME, MQTT_PORT);
 	mqtt.setCallback([] (const char *topic, const uint8_t *payload, unsigned int length) {
-		static const std::string startup_topic = std::string{MQTT_TOPIC} + "/startup_complete";
-		static const std::string reboot_topic = std::string{MQTT_TOPIC} + "/reboot";
-		static const std::string reload_topic = std::string{MQTT_TOPIC} + "/reload";
-		static const std::string addresses_topic = std::string{MQTT_TOPIC} + "/addresses";
-		static const std::string switch0_addresses_topic = std::string{MQTT_TOPIC} + "/switch/0/addresses";
-		static const std::string switch1_addresses_topic = std::string{MQTT_TOPIC} + "/switch/1/addresses";
-		static const std::string switch0_preset_topic = std::string{MQTT_TOPIC} + "/switch/0/preset";
-		static const std::string switch1_preset_topic = std::string{MQTT_TOPIC} + "/switch/1/preset";
-		static const std::string preset_prefix = std::string{MQTT_TOPIC} + "/preset/";
-		static const std::string set_prefix = std::string{MQTT_TOPIC} + "/set/";
+		static const std::string preset_prefix = "/preset/";
+		static const std::string set_prefix = "/set/";
 		std::string topic_str = topic;
 
 		if (topic_str == "meta/mqtt-agents/poll") {
 			mqtt.publish("meta/mqtt-agents/reply", device_id.c_str());
-		} else if (topic_str == startup_topic) {
+			return;
+		} else if (topic_str.rfind(MQTT_TOPIC, 0) != 0) {
+			return;
+		}
+
+		topic_str = topic_str.substr(strlen(MQTT_TOPIC));
+
+		if (topic_str == "/startup_complete") {
 			if (!startup_complete) {
 				report("main", "Startup complete");
 				startup_complete = true;
 				save_config();
 			}
-		} else if (topic_str == reboot_topic) {
+		} else if (topic_str == "/reboot") {
 			esp_restart();
-		} else if (topic_str == reload_topic) {
+		} else if (topic_str == "/reload") {
 			load_config();
 			save_config();
-		} else if (topic_str == addresses_topic) {
+		} else if (topic_str == "/addresses") {
 			configure_addresses(-1, std::string{(const char*)payload, length});
-		} else if (topic_str == switch0_addresses_topic) {
+		} else if (topic_str == "/switch/0/addresses") {
 			configure_addresses(0, std::string{(const char*)payload, length});
-		} else if (topic_str == switch1_addresses_topic) {
+		} else if (topic_str == "/switch/1/addresses") {
 			configure_addresses(1, std::string{(const char*)payload, length});
-		} else if (topic_str == switch0_preset_topic) {
+		} else if (topic_str == "/switch/0/name") {
+			current_config.switches[0].name = std::string{(const char*)payload, length};
+		} else if (topic_str == "/switch/1/name") {
+			current_config.switches[1].name = std::string{(const char*)payload, length};
+		} else if (topic_str == "/switch/0/preset") {
 			current_config.switches[0].preset = std::string{(const char*)payload, length};
-		} else if (topic_str == switch1_preset_topic) {
+		} else if (topic_str == "/switch/1/preset") {
 			current_config.switches[1].preset = std::string{(const char*)payload, length};
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
@@ -513,10 +521,11 @@ void loop() {
 			switch_state[i].value = switch_value;
 
 			if (wifi_up && mqtt.connected()) {
-				std::string name = (i == 0 ? "Left light" : "Right light");
+				std::string name = current_config.switches[i].name;
 
-				if (i == 0 && current_config.switches[1].preset.empty()) {
-					name = "Light";
+				if (name.empty()) {
+					name = "Light switch ";
+					name += std::to_string(i);
 				}
 
 				mqtt.publish((std::string{MQTT_TOPIC}
@@ -525,7 +534,7 @@ void loop() {
 					true);
 				switch_state[i].report_us = esp_timer_get_time();
 
-				report("switch", name + " switch "
+				report("switch", name + " "
 					+ (switch_state[i].value == LOW ? "ON" : "OFF")
 					+ " (levels reset to " + current_config.switches[i].preset + ")");
 			}
@@ -585,6 +594,8 @@ void loop() {
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/addresses").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/addresses").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/addresses").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/name").c_str());
+				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/name").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/preset").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/preset").c_str());
 				mqtt.subscribe((std::string{MQTT_TOPIC} + "/preset/+").c_str());
