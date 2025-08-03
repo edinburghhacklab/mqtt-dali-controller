@@ -171,36 +171,38 @@ void Config::load_config() {
 	}
 }
 
-bool Config::read_config(const std::string &FILENAME, bool load) {
-	ESP_LOGE("config", "Reading config file %s", FILENAME.c_str());
+bool Config::read_config(const std::string &filename, bool load) {
+	ESP_LOGE("config", "Reading config file %s", filename.c_str());
 	const char mode[2] = {'r', '\0'};
-	auto file = FS.open(FILENAME.c_str(), mode);
+	auto file = FS.open(filename.c_str(), mode);
 	if (file) {
 		cbor::Reader reader{file};
 
 		if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag)
 				|| !reader.isWellFormed()) {
-			ESP_LOGE("config", "Failed to parse config file %s", FILENAME.c_str());
+			ESP_LOGE("config", "Failed to parse config file %s", filename.c_str());
 			return false;
 		} else {
 			if (load) {
-				ESP_LOGE("config", "Loading config from file %s", FILENAME.c_str());
+				ESP_LOGE("config", "Loading config from file %s", filename.c_str());
 				file.seek(0);
 
 				if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag))
 					return false;
 
 				if (read_config(reader)) {
-					ESP_LOGE("config", "Loaded config from file %s", FILENAME.c_str());
+					ESP_LOGE("config", "Loaded config from file %s", filename.c_str());
+					network_.publish((std::string{MQTT_TOPIC} + "/loaded_config").c_str(),
+						filename + " " + std::to_string(file.size()));
 				} else {
-					ESP_LOGE("config", "Invalid config file %s", FILENAME.c_str());
+					ESP_LOGE("config", "Invalid config file %s", filename.c_str());
 				}
 
 			}
 			return true;
 		}
 	} else {
-		ESP_LOGE("config", "Config file %s does not exist", FILENAME.c_str());
+		ESP_LOGE("config", "Config file %s does not exist", filename.c_str());
 		return false;
 	}
 }
@@ -490,26 +492,39 @@ void Config::save_config() {
 	}
 }
 
-bool Config::write_config(const std::string &FILENAME) {
-	ESP_LOGE("config", "Writing config file %s", FILENAME.c_str());
-	const char mode[2] = {'w', '\0'};
-	auto file = FS.open(FILENAME.c_str(), mode);
-	if (file) {
-		cbor::Writer writer{file};
+bool Config::write_config(const std::string &filename) {
+	ESP_LOGE("config", "Writing config file %s", filename.c_str());
+	{
+		const char mode[2] = {'w', '\0'};
+		auto file = FS.open(filename.c_str(), mode);
+		if (file) {
+			cbor::Writer writer{file};
 
-		writer.writeTag(cbor::kSelfDescribeTag);
-		write_config(writer);
+			writer.writeTag(cbor::kSelfDescribeTag);
+			write_config(writer);
 
-		if (file.getWriteError()) {
-			network_.report("config", std::string{"Failed to write config file "} + FILENAME
-					+ ": " + std::to_string(file.getWriteError()));
-			return false;
+			if (file.getWriteError()) {
+				network_.report("config", std::string{"Failed to write config file "} + filename
+						+ ": " + std::to_string(file.getWriteError()));
+				return false;
+			}
 		} else {
-			return true;
+			network_.report("config", std::string{"Unable to open config file "} + filename + " for writing");
+			return false;
 		}
-	} else {
-		network_.report("config", std::string{"Unable to open config file "} + FILENAME + " for writing");
-		return false;
+	}
+	{
+		const char mode[2] = {'r', '\0'};
+		auto file = FS.open(filename.c_str(), mode);
+		if (file) {
+			ESP_LOGE("config", "Saved config to file %s", filename.c_str());
+			network_.publish((std::string{MQTT_TOPIC} + "/saved_config").c_str(),
+				filename + " " + std::to_string(file.size()));
+			return true;
+		} else {
+			network_.report("config", std::string{"Unable to open config file "} + filename + " for reading");
+			return false;
+		}
 	}
 }
 
