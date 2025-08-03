@@ -173,7 +173,7 @@ static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, 
 	size_t offset = 0;
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (current_config.lights[i]) {
+		if (!filter || current_config.lights[i]) {
 			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
 			offset += 2;
 		}
@@ -460,6 +460,8 @@ static bool read_config_presets(cbor::Reader &reader) {
 static bool read_config(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
+
+	current_config = {};
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
