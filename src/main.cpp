@@ -635,6 +635,29 @@ static void save_config() {
 	}
 }
 
+static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
+	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
+		preset_levels_text(levels, false).c_str(), true);
+}
+
+static void publish_config() {
+	mqtt.publish((std::string{MQTT_TOPIC} + "/addresses").c_str(),
+		addresses_text(-1).c_str(), true);
+
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		mqtt.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
+			+ "/name").c_str(), current_config.switches[i].name.c_str(), true);
+		mqtt.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
+			+ "/addresses").c_str(), addresses_text(i).c_str(), true);
+		mqtt.publish((std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i)
+			+ "/preset").c_str(), current_config.switches[i].preset.c_str(), true);
+	}
+
+	for (const auto &preset : current_config.presets) {
+		publish_preset(preset.first, preset.second);
+	}
+}
+
 static void configure_addresses(int switch_id, std::string addresses) {
 	auto before = addresses_text(switch_id);
 
@@ -684,11 +707,6 @@ static void configure_addresses(int switch_id, std::string addresses) {
 			report("lights", std::string{"Switch "} + std::to_string(switch_id) + " addresses: " + before + " -> " + after);
 		}
 	}
-}
-
-static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
-	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
-		preset_levels_text(levels, false).c_str(), true);
 }
 
 static std::set<unsigned int> parse_light_ids(const std::string &light_id) {
@@ -1016,15 +1034,18 @@ void setup() {
 
 		if (topic_str == "/startup_complete") {
 			if (!startup_complete) {
-				report("main", "Startup complete");
+				ESP_LOGE("main", "Startup complete");
 				startup_complete = true;
 				save_config();
+				publish_config();
 			}
 		} else if (topic_str == "/reboot") {
 			esp_restart();
 		} else if (topic_str == "/reload") {
 			load_config();
 			save_config();
+			publish_config();
+			republish_active_presets = true;
 		} else if (topic_str == "/addresses") {
 			configure_addresses(-1, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/0/addresses") {
