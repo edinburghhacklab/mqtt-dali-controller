@@ -41,54 +41,16 @@ static constexpr unsigned int LED_GPIO = 38;
 static uint64_t last_uptime_us = 0;
 static bool startup_complete = false;
 
-static std::array<uint8_t,MAX_ADDR+1> tx_levels{};
-
 static Network network;
 static Config config{network};
 static Lights lights{network, config};
+static Dali dali{config, lights};
 static Switches switches{network, config, lights};
 
 namespace cbor = qindesign::cbor;
 
-static void transmit_dali_one(unsigned int address, unsigned int level) {
-	if (address > MAX_ADDR || level > MAX_LEVEL) {
-		return;
-	}
-
-	// TODO
-}
-
-static void transmit_dali_all() {
-	static uint64_t last_dali_us = 0;
-	bool repeat = !last_dali_us || esp_timer_get_time() - last_dali_us >= ONE_S;
-	auto levels = lights.get_levels();
-
-	if (repeat || levels != tx_levels) {
-		const auto lights = config.get_addresses();
-
-		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-			if (lights[i]) {
-				/*
-				 * Only transmit changed levels immediately, to improve
-				 * responsiveness when dimming with a rotary encoder.
-				 */
-				if (repeat || levels[i] != tx_levels[i]) {
-					transmit_dali_one(i, levels[i]);
-				}
-			}
-		}
-
-		tx_levels = levels;
-		if (repeat) {
-			last_dali_us = esp_timer_get_time();
-		}
-	}
-}
-
 void setup() {
-	pinMode(TX_GPIO, OUTPUT);
-	digitalWrite(TX_GPIO, HIGH);
-
+	dali.setup();
 	switches.setup();
 
 	pinMode(LED_GPIO, OUTPUT);
@@ -188,7 +150,7 @@ void setup() {
 
 void loop() {
 	switches.loop();
-	transmit_dali_all();
+	dali.loop();
 	lights.loop();
 
 	if (startup_complete && network.connected()) {

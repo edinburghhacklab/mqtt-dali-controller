@@ -21,7 +21,6 @@
 #include <array>
 
 static constexpr unsigned int NUM_SWITCHES = 2;
-static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
 class Config;
 class Lights;
