@@ -51,9 +51,16 @@ static constexpr unsigned int TX_GPIO = 21;
 static const std::string filename = "/config.cbor";
 static const std::string backup_filename = "/config.cbor~";
 
+
+struct SwitchState {
+	SwitchState() : value(LOW), report_us(0) {}
+
+	int value;
+	uint64_t report_us;
+};
+
 static bool startup_complete = false;
-static std::array<int,NUM_SWITCHES> last_switch_state = {LOW, LOW};
-static std::array<uint64_t,NUM_SWITCHES> last_switch_report_us = {0, 0};
+static std::array<SwitchState,NUM_SWITCHES> switch_state;
 
 static uint64_t last_wifi_us = 0;
 static bool wifi_up = false;
@@ -64,20 +71,30 @@ static WiFiClient client;
 static PubSubClient mqtt(client);
 static String device_id;
 
+struct SwitchConfig {
+	std::array<bool,MAX_ADDR+1> lights;
+	std::string preset;
+
+	bool operator==(const SwitchConfig &other) const {
+		return this->lights == other.lights
+				&& this->preset == other.preset;
+	}
+
+	inline bool operator!=(const SwitchConfig &other) const { return !(*this == other); }
+};
+
 struct Config {
 	std::array<bool,MAX_ADDR+1> lights;
-	std::array<std::array<bool,MAX_ADDR+1>,NUM_SWITCHES> switch_lights;
-	std::array<std::string,NUM_SWITCHES> switch_preset;
+	std::array<SwitchConfig,NUM_SWITCHES> switches;
 	std::unordered_map<std::string, std::array<int,MAX_ADDR+1>> presets;
 
-	bool operator==(const Config &other) {
+	bool operator==(const Config &other) const {
 		return this->lights == other.lights
-				&& this->switch_lights == other.switch_lights
-				&& this->switch_preset == other.switch_preset
+				&& this->switches == other.switches
 				&& this->presets == other.presets;
 	}
 
-	inline bool operator!=(const Config &other) { return !(*this == other); }
+	inline bool operator!=(const Config &other) const { return !(*this == other); }
 };
 
 static Config current_config;
@@ -184,11 +201,11 @@ static void write_config(cbor::Writer &writer) {
 		writeText(writer, "lights");
 		writer.beginArray(MAX_ADDR+1);
 		for (unsigned int j = 0; j <= MAX_ADDR; j++) {
-			writer.writeBoolean(current_config.switch_lights[i][j]);
+			writer.writeBoolean(current_config.switches[i].lights[j]);
 		}
 
 		writeText(writer, "preset");
-		writeText(writer, current_config.switch_preset[i]);
+		writeText(writer, current_config.switches[i].preset);
 	}
 
 	writeText(writer, "presets");
@@ -255,7 +272,7 @@ static void configure_addresses(int switch_id, std::string addresses) {
 		current_config.lights.fill(false);
 	} else {
 		ESP_LOGE("lights", "Configure light switch addresses");
-		current_config.switch_lights[switch_id].fill(false);
+		current_config.switches[switch_id].lights.fill(false);
 	}
 
 	while (addresses.length() >= 2) {
@@ -279,7 +296,7 @@ static void configure_addresses(int switch_id, std::string addresses) {
 				current_config.lights[address] = true;
 			} else {
 				ESP_LOGE("lights", "Light %u added to switch %u", address, switch_id);
-				current_config.switch_lights[switch_id][address] = true;
+				current_config.switches[switch_id].lights[address] = true;
 			}
 		}
 
@@ -458,9 +475,9 @@ void setup() {
 		} else if (topic_str == switch1_addresses_topic) {
 			configure_addresses(1, std::string{(const char*)payload, length});
 		} else if (topic_str == switch0_preset_topic) {
-			current_config.switch_preset[0] = std::string{(const char*)payload, length};
+			current_config.switches[0].preset = std::string{(const char*)payload, length};
 		} else if (topic_str == switch1_preset_topic) {
-			current_config.switch_preset[1] = std::string{(const char*)payload, length};
+			current_config.switches[1].preset = std::string{(const char*)payload, length};
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
 			auto idx = preset_name.find("/");
@@ -490,36 +507,36 @@ void setup() {
 
 void loop() {
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		int switch_state = current_config.switch_preset[i].empty() ? LOW : digitalRead(SWITCH_GPIO[i]);
+		int switch_value = current_config.switches[i].preset.empty() ? LOW : digitalRead(SWITCH_GPIO[i]);
 
-		if (switch_state != last_switch_state[i]) {
-			last_switch_state[i] = switch_state;
+		if (switch_value != switch_state[i].value) {
+			switch_state[i].value = switch_value;
 
 			if (wifi_up && mqtt.connected()) {
 				std::string name = (i == 0 ? "Left light" : "Right light");
 
-				if (i == 0 && current_config.switch_preset[1].empty()) {
+				if (i == 0 && current_config.switches[1].preset.empty()) {
 					name = "Light";
 				}
 
 				mqtt.publish((std::string{MQTT_TOPIC}
 					+ "/switch/" + std::to_string(i) + "/state").c_str(),
-					switch_state == LOW ? "1" : "0",
+					switch_state[i].value == LOW ? "1" : "0",
 					true);
-				last_switch_report_us[i] = esp_timer_get_time();
+				switch_state[i].report_us = esp_timer_get_time();
 
 				report("switch", name + " switch "
-					+ (switch_state == LOW ? "ON" : "OFF")
-					+ " (levels reset to " + current_config.switch_preset[i] + ")");
+					+ (switch_state[i].value == LOW ? "ON" : "OFF")
+					+ " (levels reset to " + current_config.switches[i].preset + ")");
 			}
-			select_preset(current_config.switch_preset[i], &current_config.switch_lights[i]);
-		} else if (last_switch_report_us[i]
-				&& esp_timer_get_time() - last_switch_report_us[i] >= ONE_M) {
+			select_preset(current_config.switches[i].preset, &current_config.switches[i].lights);
+		} else if (switch_state[i].report_us
+				&& esp_timer_get_time() - switch_state[i].report_us >= ONE_M) {
 			mqtt.publish((std::string{MQTT_TOPIC}
 					+ "/switch/" + std::to_string(i) + "/state").c_str(),
-					last_switch_state[i] == LOW ? "1" : "0",
+					switch_state[i].value == LOW ? "1" : "0",
 					true);
-			last_switch_report_us[i] = esp_timer_get_time();
+			switch_state[i].report_us = esp_timer_get_time();
 		}
 	}
 
