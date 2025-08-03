@@ -24,12 +24,6 @@
 #include "lights.h"
 #include "util.h"
 
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
-
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 

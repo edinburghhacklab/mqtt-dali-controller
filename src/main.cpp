@@ -28,35 +28,30 @@
 #include "lights.h"
 #include "network.h"
 #include "switches.h"
+#include "ui.h"
 #include "util.h"
 
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
-
-static constexpr unsigned int LED_GPIO = 38;
-
-static uint64_t last_uptime_us = 0;
-static bool startup_complete = false;
-
 static Network network;
+static UI ui{network};
 static Config config{network};
 static Lights lights{network, config};
 static Dali dali{config, lights};
 static Switches switches{network, config, lights};
+static bool startup_complete{false};
 
 namespace cbor = qindesign::cbor;
+
+static void set_startup_complete(bool state) {
+	startup_complete = state;
+	lights.startup_complete(state);
+	ui.startup_complete(state);
+}
 
 void setup() {
 	dali.setup();
 	switches.setup();
-
-	pinMode(LED_GPIO, OUTPUT);
-	digitalWrite(LED_GPIO, LOW);
-
 	config.setup();
+	ui.setup();
 
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string preset_prefix = "/preset/";
@@ -75,8 +70,7 @@ void setup() {
 		if (topic_str == "/startup_complete") {
 			if (!startup_complete) {
 				ESP_LOGE("main", "Startup complete");
-				startup_complete = true;
-				lights.startup_complete(true);
+				set_startup_complete(true);
 				config.publish_config();
 			}
 		} else if (topic_str == "/reboot") {
@@ -152,20 +146,12 @@ void loop() {
 	switches.loop();
 	dali.loop();
 	lights.loop();
-
-	if (startup_complete && network.connected()) {
-		if (!last_uptime_us || esp_timer_get_time() - last_uptime_us >= ONE_M) {
-			network.publish(std::string{MQTT_TOPIC} + "/uptime_us",
-				std::to_string(esp_timer_get_time()));
-			last_uptime_us = esp_timer_get_time();
-		}
-	}
+	ui.loop();
 
 	network.loop([] () {
 		std::string topic = MQTT_TOPIC;
 
-		startup_complete = false;
-		lights.startup_complete(false);
+		set_startup_complete(false);
 
 		network.subscribe("meta/mqtt-agents/poll");
 		network.subscribe(topic + "/reboot");

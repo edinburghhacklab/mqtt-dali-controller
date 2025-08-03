@@ -28,12 +28,6 @@
 #include "network.h"
 #include "util.h"
 
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
-
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
 Switches::Switches(Network &network, Config &config, Lights &lights)

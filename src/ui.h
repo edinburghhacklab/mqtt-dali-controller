@@ -17,11 +17,22 @@
 
 #pragma once
 
-static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr uint64_t ONE_M = 60 * ONE_S;
+#include <cstdint>
 
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
+class Network;
+
+class UI {
+public:
+    UI(Network &network);
+
+    void setup();
+    void loop();
+    void startup_complete(bool state);
+
+private:
+    void publish_uptime();
+
+    Network &network_;
+    uint64_t last_publish_us_{0};
+    bool startup_complete_{false};
+};

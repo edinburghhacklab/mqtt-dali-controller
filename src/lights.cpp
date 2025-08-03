@@ -29,12 +29,6 @@
 #include "network.h"
 #include "util.h"
 
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
-
 Lights::Lights(Network &network, Config &config)
         : network_(network), config_(config) {
     active_presets_.fill(RESERVED_PRESET_UNKNOWN);

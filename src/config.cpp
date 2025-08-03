@@ -39,12 +39,7 @@
 #include "lights.h"
 #include "network.h"
 #include "switches.h"
-
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
+#include "util.h"
 
 static constexpr auto &FS = LittleFS;
 
