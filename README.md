@@ -25,11 +25,15 @@ MQTT hostname and MQTT topic (e.g. `dali`).
 
 ## MQTT interface
 
+### Lights
+
 Configure which lights are present by listing them as uppercase hexadecimal
 values:
 ```
 dali/addresses [<00-3F>...]
 ```
+
+### Switches
 
 Configure which light switches are present by listing the lights as uppercase
 hexadecimal values and configuring the default preset:
@@ -42,6 +46,8 @@ dali/switch/<0-1>/preset <name>
 Light switch status is reported as `dali/switch/<0-1>/state` when it changes
 and then every 60 seconds.
 
+### Presets
+
 Up to 50 presets can be configured, setting an empty value to skip that light:
 
 ```
@@ -49,7 +55,11 @@ dali/preset/comfort/<0-63> <0-254>
 dali/preset/comfort/<0-63> (null)
 ```
 
-The builtin preset names `off` and `custom` can't be configured.
+The reserved preset names `off`, `custom` and `unknown` can't be configured.
+
+The active presets are reported as `dali/preset/<name>/active` when they change
+and then every 60 seconds. It's possible for multiple presets to be active as
+long as one or more lights were last set using that preset.
 
 Remove a preset:
 
@@ -68,6 +78,8 @@ Select preset:
 ```
 dali/preset/comfort (null)
 ```
+
+### Miscellaneous
 
 Reload config:
 

@@ -29,6 +29,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #if __has_include("config.h")
@@ -44,12 +45,14 @@ static constexpr uint8_t MAX_LEVEL = 254;
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr unsigned int NUM_SWITCHES = 2;
+static constexpr size_t MAX_PRESETS = 50;
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 static constexpr unsigned int LED_GPIO = 38;
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 static const std::string BUILTIN_PRESET_OFF = "off";
-static const std::string BUILTIN_PRESET_CUSTOM = "custom";
+static const std::string RESERVED_PRESET_CUSTOM = "custom";
+static const std::string RESERVED_PRESET_UNKNOWN = "unknown";
 static const std::string filename = "/config.cbor";
 static const std::string backup_filename = "/config.cbor~";
 
@@ -100,13 +103,16 @@ struct Config {
 	inline bool operator!=(const Config &other) const { return !(*this == other); }
 };
 
-static Config current_config;
-static Config saved_config;
+static Config current_config{};
+static Config saved_config{};
 static bool config_saved = false;
 
-static std::array<uint8_t,MAX_ADDR+1> levels;
-static std::array<uint8_t,MAX_ADDR+1> tx_levels;
-static std::array<std::string,MAX_ADDR+1> active_presets;
+static std::array<uint8_t,MAX_ADDR+1> levels{};
+static std::array<uint8_t,MAX_ADDR+1> tx_levels{};
+static std::array<std::string,MAX_ADDR+1> active_presets{};
+static std::unordered_set<std::string> last_active_presets{};
+static bool republish_active_presets = true;
+static uint64_t last_published_active_presets_us = 0;
 
 namespace cbor = qindesign::cbor;
 
@@ -314,7 +320,6 @@ static void configure_addresses(int switch_id, std::string addresses) {
 }
 
 static void configure_preset(const std::string &name, int light_id, int level) {
-	static constexpr size_t MAX_PRESETS = 50;
 	const auto it = current_config.presets.find(name);
 
 	if (light_id < 0 || light_id > MAX_ADDR) {
@@ -325,7 +330,9 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 		return;
 	}
 
-	if (name == BUILTIN_PRESET_OFF || name == BUILTIN_PRESET_CUSTOM) {
+	if (name == BUILTIN_PRESET_OFF
+			|| name == RESERVED_PRESET_CUSTOM
+			|| name == RESERVED_PRESET_UNKNOWN) {
 		return;
 	}
 
@@ -362,6 +369,7 @@ static void select_preset(const std::string &name,
 			if (filter == nullptr || filter->at(i)) {
 				levels[i] = 0;
 				active_presets[i] = BUILTIN_PRESET_OFF;
+				republish_active_presets = true;
 			}
 		}
 	} else {
@@ -370,6 +378,7 @@ static void select_preset(const std::string &name,
 				if (filter == nullptr || filter->at(i)) {
 					levels[i] = it->second[i];
 					active_presets[i] = name;
+					republish_active_presets = true;
 				}
 			}
 		}
@@ -384,6 +393,7 @@ static void delete_preset(const std::string &name) {
 	}
 
 	current_config.presets.erase(it);
+	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/active").c_str(), "", true);
 }
 
 static void set_level(int light_id, int level) {
@@ -404,7 +414,51 @@ static void set_level(int light_id, int level) {
 			+ std::to_string(level));
 
 	levels[light_id] = level;
-	active_presets[light_id] = BUILTIN_PRESET_CUSTOM;
+	active_presets[light_id] = RESERVED_PRESET_CUSTOM;
+	republish_active_presets = true;
+}
+
+static void publish_active_presets() {
+	bool force = !last_published_active_presets_us
+			|| esp_timer_get_time() - last_published_active_presets_us >= ONE_M;
+
+	if (!force && !republish_active_presets) {
+		return;
+	}
+
+	std::unordered_set<std::string> active;
+	std::unordered_set<std::string> all(MAX_PRESETS + 3);
+
+	all.insert(BUILTIN_PRESET_OFF);
+	all.insert(RESERVED_PRESET_CUSTOM);
+	all.insert(RESERVED_PRESET_UNKNOWN);
+
+	for (const auto &preset : current_config.presets) {
+		all.insert(preset.first);
+	}
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		active.insert(active_presets[i]);
+	}
+
+	for (const auto &preset : all) {
+		bool is_active = active.find(preset) != active.end();
+		bool last_active = last_active_presets.find(preset) != last_active_presets.end();
+
+		if (force || (is_active != last_active)) {
+			mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + preset + "/active").c_str(), is_active ? "1" : "0", true);
+		}
+
+		if (is_active) {
+			last_active_presets.insert(preset);
+		} else {
+			last_active_presets.erase(preset);
+		}
+	}
+
+	if (force) {
+		last_published_active_presets_us = esp_timer_get_time();
+	}
 }
 
 static void transmit_dali_one(unsigned int address, unsigned int level) {
@@ -445,6 +499,7 @@ void setup() {
 	digitalWrite(LED_GPIO, LOW);
 
 	device_id = String("mqtt-dali-controller_") + String(ESP.getEfuseMac(), HEX);
+	active_presets.fill(RESERVED_PRESET_UNKNOWN);
 
 	FS.begin(true);
 	load_config();
@@ -507,7 +562,7 @@ void setup() {
 
 				if (light_id == "delete") {
 					delete_preset(preset_name);
-				} else {
+				} else if (light_id[0] >= '0' && light_id[0] <= '9') {
 					int value = -1;
 
 					if (payload[0]) {
@@ -563,6 +618,10 @@ void loop() {
 	}
 
 	transmit_dali_all();
+
+	if (startup_complete && wifi_up && mqtt.connected()) {
+		publish_active_presets();
+	}
 
 	switch (WiFi.status()) {
 	case WL_IDLE_STATUS:
