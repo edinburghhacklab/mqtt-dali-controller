@@ -662,10 +662,8 @@ static void configure_addresses(int switch_id, std::string addresses) {
 	auto before = addresses_text(switch_id);
 
 	if (switch_id == -1) {
-		ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
 		current_config.lights.fill(false);
 	} else {
-		ESP_LOGE("lights", "Configure light switch %d addresses: %s", switch_id, addresses.c_str());
 		current_config.switches[switch_id].lights.fill(false);
 	}
 
@@ -702,8 +700,10 @@ static void configure_addresses(int switch_id, std::string addresses) {
 
 	if (before != after) {
 		if (switch_id == -1) {
+			ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
 			report("lights", std::string{"Addresses: "} + before + " -> " + after);
 		} else {
+			ESP_LOGE("lights", "Configure light switch %d addresses: %s", switch_id, addresses.c_str());
 			report("lights", std::string{"Switch "} + std::to_string(switch_id) + " addresses: " + before + " -> " + after);
 		}
 	}
@@ -846,10 +846,67 @@ static void configure_preset(const std::string &name, const std::string &lights,
 	auto after = preset_levels_text(it->second, true);
 
 	save_config();
-	publish_preset(it->first, it->second);
+
+	if (before != after) {
+		publish_preset(it->first, it->second);
+	}
+
 	report("presets", std::string{"Preset "} + name + ": " + list_lights(light_ids) + " = " + std::to_string(level));
 
 	if (before != after) {
+		report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
+	}
+}
+
+static void configure_preset(const std::string &name, std::string levels) {
+	if (!valid_preset_name(name)) {
+		return;
+	}
+
+	auto it = current_config.presets.find(name);
+
+	if (it == current_config.presets.cend()) {
+		if (current_config.presets.size() == MAX_PRESETS) {
+			return;
+		}
+
+		std::array<int,MAX_ADDR+1> empty_levels;
+
+		empty_levels.fill(-1);
+		it = current_config.presets.emplace(name, std::move(empty_levels)).first;
+	}
+
+	auto before = preset_levels_text(it->second, true);
+	unsigned int light_id = 0;
+
+	it->second.fill(-1);
+
+	while (levels.length() >= 2 && light_id <= MAX_ADDR) {
+		uint8_t level = 0;
+
+		if (levels[0] >= '0' && levels[0] <= '9') {
+			level |= (levels[0] - '0') << 4;
+		} else if (levels[0] >= 'A' && levels[0] <= 'F') {
+			level |= (levels[0] - 'A' + 10) << 4;
+		}
+
+		if (levels[1] >= '0' && levels[1] <= '9') {
+			level |= levels[1] - '0';
+		} else if (levels[1] >= 'A' && levels[1] <= 'F') {
+			level |= levels[1] - 'A' + 10;
+		}
+
+		levels = levels.substr(2);
+
+		it->second[light_id++] = (level == 0xFF ? -1 : level);
+	}
+
+	auto after = preset_levels_text(it->second, true);
+
+	save_config();
+
+	if (before != after) {
+		publish_preset(it->first, it->second);
 		report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
 	}
 }
@@ -1081,6 +1138,8 @@ void setup() {
 
 				if (light_id == "delete") {
 					delete_preset(preset_name);
+				} else if (light_id == "levels") {
+					configure_preset(preset_name, std::string{(const char *)payload, length});
 				} else if (light_id == "all" || (light_id[0] >= '0' && light_id[0] <= '9')) {
 					long value = -1;
 
