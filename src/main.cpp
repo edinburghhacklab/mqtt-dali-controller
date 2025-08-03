@@ -365,7 +365,7 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 		return;
 	}
 
-	if (level < -1 || level > MAX_ADDR) {
+	if (level < -1 || level > MAX_LEVEL) {
 		return;
 	}
 
@@ -607,7 +607,7 @@ void setup() {
 				} else if (light_id[0] >= '0' && light_id[0] <= '9') {
 					int value = -1;
 
-					if (payload[0]) {
+					if (length) {
 						value = atoi(std::string{(const char *)payload, length}.c_str());
 					}
 
