@@ -27,6 +27,7 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -78,6 +79,7 @@ struct Config {
 
 	inline bool operator!=(const Config &other) { return !(*this == other); }
 };
+
 static Config current_config;
 static Config saved_config;
 static bool config_saved = false;
@@ -86,6 +88,34 @@ static std::array<uint8_t,MAX_ADDR+1> levels;
 static std::array<uint8_t,MAX_ADDR+1> tx_levels;
 
 namespace cbor = qindesign::cbor;
+
+static void json_append_escape(std::string &output, const std::string_view value) {
+	for (size_t i = 0; i < value.length(); i++) {
+		if (value[i] == '"' || value[i] == '\\') {
+			output += '\\';
+		}
+		output += value[i];
+	}
+}
+
+static void report(const char *tag, const std::string &message) {
+	ESP_LOGE(tag, "%s", message.c_str());
+
+	if (wifi_up && mqtt.connected()) {
+		std::string payload;
+
+		payload.reserve(MQTT_MAX_PACKET_SIZE);
+		payload += "{\"to\": \"";
+		json_append_escape(payload, IRC_CHANNEL);
+		payload += "\", \"message\": \"";
+		json_append_escape(payload, MQTT_TOPIC);
+		json_append_escape(payload, ": ");
+		json_append_escape(payload, message);
+		payload += + "\"}";
+
+		mqtt.publish("irc/send", payload.c_str());
+	}
+}
 
 static bool read_config(cbor::Reader &reader) {
 
@@ -188,26 +218,14 @@ static bool write_config(const std::string &filename) {
 		write_config(writer);
 
 		if (file.getWriteError()) {
-			ESP_LOGE("config", "Failed to write config file %s: %d", filename.c_str(), file.getWriteError());
-			if (wifi_up && mqtt.connected()) {
-				mqtt.publish("irc/send", (std::string{"{\"to\": \""}
-					+ IRC_CHANNEL + "\", \"message\": \""
-					+ MQTT_TOPIC + ": Failed to write config file " + filename
-					+ ": " + std::to_string(file.getWriteError())
-					+ "\"}").c_str());
-			}
+			report("config", std::string{"Failed to write config file "} + filename
+					+ ": " + std::to_string(file.getWriteError()));
 			return false;
 		} else {
 			return true;
 		}
 	} else {
-		ESP_LOGE("config", "Unable to open config file %s for writing", filename.c_str());
-		if (wifi_up && mqtt.connected()) {
-			mqtt.publish("irc/send", (std::string{"{\"to\": \""}
-				+ IRC_CHANNEL + "\", \"message\": \""
-				+ MQTT_TOPIC + ": Unable to open config file " + filename + " for writing"
-				+ "\"}").c_str());
-		}
+		report("config", std::string{"Unable to open config file "} + filename + " for writing");
 		return false;
 	}
 }
@@ -312,12 +330,7 @@ static void select_preset(const std::string &name,
 		return;
 	}
 
-	if (wifi_up && mqtt.connected()) {
-		mqtt.publish("irc/send", (std::string{"{\"to\": \""}
-			+ IRC_CHANNEL + "\", \"message\": \""
-			+ MQTT_TOPIC + ": Preset - "
-			+ name + "\"}").c_str());
-	}
+	report("lights", std::string{"Preset - "} + name);
 
 	if (name == "off") {
 		for (int i = 0; i < MAX_ADDR; i++) {
@@ -357,13 +370,9 @@ static void set_level(int light_id, int level) {
 		return;
 	}
 
-	if (wifi_up && mqtt.connected()) {
-		mqtt.publish("irc/send", (std::string{"{\"to\": \""}
-			+ IRC_CHANNEL + "\", \"message\": \""
-			+ MQTT_TOPIC + ": Light #"
+	report("lights", std::string{"Light #"}
 			+ std::to_string(light_id) + " - "
-			+ std::to_string(level) + "\"}").c_str());
-	}
+			+ std::to_string(level));
 
 	levels[light_id] = level;
 }
@@ -433,7 +442,7 @@ void setup() {
 			mqtt.publish("meta/mqtt-agents/reply", device_id.c_str());
 		} else if (topic_str == startup_topic) {
 			if (!startup_complete) {
-				ESP_LOGE("main", "Startup complete");
+				report("main", "Startup complete");
 				startup_complete = true;
 				save_config();
 			}
@@ -499,11 +508,9 @@ void loop() {
 					true);
 				last_switch_report_us[i] = esp_timer_get_time();
 
-				mqtt.publish("irc/send", (std::string{"{\"to\": \""}
-					+ IRC_CHANNEL + "\", \"message\": \""
-					+ MQTT_TOPIC + ": " + name + " switch "
+				report("switch", name + " switch "
 					+ (switch_state == LOW ? "ON" : "OFF")
-					+ " (levels reset to " + current_config.switch_preset[i] + ")\"}").c_str());
+					+ " (levels reset to " + current_config.switch_preset[i] + ")");
 			}
 			select_preset(current_config.switch_preset[i], &current_config.switch_lights[i]);
 		} else if (last_switch_report_us[i]
