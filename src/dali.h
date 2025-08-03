@@ -27,17 +27,17 @@ class Lights;
 
 class Dali {
 public:
-    Dali(Config &config, Lights &lights);
+	Dali(Config &config, Lights &lights);
 
-    void setup();
-    void loop();
+	void setup();
+	void loop();
 
 private:
-    void transmit_all();
-    void transmit_one(uint8_t address, uint8_t level);
+	void transmit_all();
+	void transmit_one(uint8_t address, uint8_t level);
 
-    Config &config_;
-    Lights &lights_;
-    std::array<uint8_t,MAX_ADDR+1> tx_levels_{};
-    uint64_t last_tx_us_{0};
+	Config &config_;
+	Lights &lights_;
+	std::array<uint8_t,MAX_ADDR+1> tx_levels_{};
+	uint64_t last_tx_us_{0};
 };

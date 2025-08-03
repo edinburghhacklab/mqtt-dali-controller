@@ -31,21 +31,21 @@
 #include "util.h"
 
 Lights::Lights(Network &network, Config &config)
-        : network_(network), config_(config) {
-    active_presets_.fill(RESERVED_PRESET_UNKNOWN);
+		: network_(network), config_(config) {
+	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
 	republish_presets_.insert(RESERVED_PRESET_UNKNOWN);
 }
 
 void Lights::loop() {
-    if (startup_complete_ && network_.connected()) {
-        publish_active_presets();
-    }
+	if (startup_complete_ && network_.connected()) {
+		publish_active_presets();
+	}
 }
 
 void Lights::startup_complete(bool state) {
-    startup_complete_ = state;
+	startup_complete_ = state;
 }
 
 void Lights::address_config_changed() {
@@ -57,7 +57,7 @@ void Lights::address_config_changed(const std::string &group) {
 }
 
 std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
-    return levels_;
+	return levels_;
 }
 
 void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {

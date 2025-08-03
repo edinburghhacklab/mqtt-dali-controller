@@ -24,20 +24,20 @@ class Network;
 
 class UI {
 public:
-    UI(Network &network);
+	UI(Network &network);
 
-    void setup();
-    void loop();
-    void startup_complete(bool state);
+	void setup();
+	void loop();
+	void startup_complete(bool state);
 
 private:
-    static constexpr unsigned int LED_GPIO = 38;
+	static constexpr unsigned int LED_GPIO = 38;
 
-    void publish_uptime();
+	void publish_uptime();
 
-    Network &network_;
-    Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};
-    uint64_t last_led_us_{0};
-    uint64_t last_publish_us_{0};
-    bool startup_complete_{false};
+	Network &network_;
+	Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};
+	uint64_t last_led_us_{0};
+	uint64_t last_publish_us_{0};
+	bool startup_complete_{false};
 };

@@ -58,11 +58,11 @@ void Network::report(const char *tag, const std::string &message) {
 }
 
 void Network::subscribe(const std::string &topic) {
-    mqtt_.subscribe(topic.c_str());
+	mqtt_.subscribe(topic.c_str());
 }
 
 void Network::publish(const std::string &topic, const std::string &payload, bool retain) {
-    mqtt_.publish(topic.c_str(), payload.c_str(), retain);
+	mqtt_.publish(topic.c_str(), payload.c_str(), retain);
 }
 
 void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback) {
@@ -113,7 +113,7 @@ void Network::loop(std::function<void()> connected) {
 
 			if (mqtt_.connected()) {
 				ESP_LOGE("network", "MQTT connected");
-                connected();
+				connected();
 			} else {
 				ESP_LOGE("network", "MQTT connection failed");
 			}

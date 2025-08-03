@@ -31,11 +31,11 @@
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
 Switches::Switches(Network &network, Config &config, Lights &lights)
-        : network_(network), config_(config), lights_(lights) {
+		: network_(network), config_(config), lights_(lights) {
 }
 
 void Switches::setup() {
-   	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		pinMode(SWITCH_GPIO[i], INPUT_PULLUP);
 	}
 }
