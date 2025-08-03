@@ -81,12 +81,12 @@ public:
 	void publish_config();
 
 	std::bitset<MAX_ADDR+1> get_addresses();
-	void set_addresses(std::string addresses);
+	void set_addresses(const std::string &addresses);
 	std::string addresses_text();
 
 	std::unordered_set<std::string> group_names();
 	std::bitset<MAX_ADDR+1> get_group_addresses(const std::string &name);
-	void set_group_addresses(const std::string &name, std::string addresses);
+	void set_group_addresses(const std::string &name, const std::string &addresses);
 	std::string group_addresses_text(const std::string &name);
 	void delete_group(const std::string &name);
 

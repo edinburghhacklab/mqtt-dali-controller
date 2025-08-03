@@ -24,7 +24,7 @@ class Network;
 
 class UI {
 public:
-	UI(Network &network);
+	explicit UI(Network &network);
 
 	void setup();
 	void loop();

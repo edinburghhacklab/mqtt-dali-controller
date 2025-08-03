@@ -604,8 +604,6 @@ bool Config::write_config(const std::string &filename) {
 }
 
 void Config::write_config(cbor::Writer &writer) {
-	std::string key;
-
 	writer.beginMap(4);
 
 	writeText(writer, "lights");
@@ -717,11 +715,11 @@ std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) {
 	}
 }
 
-void Config::set_addresses(std::string addresses) {
+void Config::set_addresses(const std::string &addresses) {
 	set_addresses(BUILTIN_GROUP_ALL, addresses);
 }
 
-void Config::set_group_addresses(const std::string &name, std::string addresses) {
+void Config::set_group_addresses(const std::string &name, const std::string &addresses) {
 	if (!valid_group_name(name)) {
 		return;
 	}

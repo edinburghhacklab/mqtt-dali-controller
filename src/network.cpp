@@ -53,7 +53,7 @@ void Network::report(const char *tag, const std::string &message) {
 		json_append_escape(payload, message);
 		payload += + "\"}";
 
-		publish("irc/send", payload.c_str());
+		publish("irc/send", payload);
 	}
 }
 
