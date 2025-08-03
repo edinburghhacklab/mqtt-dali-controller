@@ -325,19 +325,23 @@ static void configure_addresses(int switch_id, std::string addresses) {
 	republish_active_presets = true;
 }
 
-static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels) {
+static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter) {
 	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+	size_t offset = 0;
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		snprintf(&buffer[2 * i], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+		if (current_config.lights[i]) {
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+			offset += 2;
+		}
 	}
 
-	return {buffer.data(), buffer.size() - 1};
+	return {buffer.data(), offset};
 }
 
 static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
 	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
-		preset_levels_text(levels).c_str(), true);
+		preset_levels_text(levels, false).c_str(), true);
 }
 
 static bool valid_preset_name(const std::string &name) {
@@ -484,7 +488,7 @@ static void configure_preset(const std::string &name, const std::string &lights,
 		it = current_config.presets.emplace(name, std::move(levels)).first;
 	}
 
-	auto before = preset_levels_text(it->second);
+	auto before = preset_levels_text(it->second, true);
 
 	for (unsigned int light_id : light_ids) {
 		if (current_config.lights[light_id]) {
@@ -498,12 +502,15 @@ static void configure_preset(const std::string &name, const std::string &lights,
 		}
 	}
 
-	auto after = preset_levels_text(it->second);
+	auto after = preset_levels_text(it->second, true);
 
 	save_config();
 	publish_preset(it->first, it->second);
 	report("presets", std::string{"Preset "} + name + ": " + list_lights(light_ids) + " = " + std::to_string(level));
-	report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
+
+	if (before != after) {
+		report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
+	}
 }
 
 static void select_preset(const std::string &name,
