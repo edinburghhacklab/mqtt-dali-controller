@@ -284,7 +284,29 @@ static void save_config() {
 	}
 }
 
+static std::string addresses_text(int switch_id) {
+	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+	size_t offset = 0;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (switch_id == -1
+				? current_config.lights[i]
+					: current_config.switches[switch_id].lights[i]) {
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFF));
+			offset += 2;
+		}
+	}
+
+	if (!offset) {
+		return "(null)";
+	}
+
+	return {buffer.data(), offset};
+}
+
 static void configure_addresses(int switch_id, std::string addresses) {
+	auto before = addresses_text(switch_id);
+
 	if (switch_id == -1) {
 		ESP_LOGE("lights", "Configure light addresses");
 		current_config.lights.fill(false);
@@ -321,8 +343,18 @@ static void configure_addresses(int switch_id, std::string addresses) {
 		addresses = addresses.substr(2);
 	}
 
+	auto after = addresses_text(switch_id);
+
 	save_config();
 	republish_active_presets = true;
+
+	if (before != after) {
+		if (switch_id == -1) {
+			report("lights", std::string{"Addresses: "} + before + " -> " + after);
+		} else {
+			report("lights", std::string{"Switch "} + std::to_string(switch_id) + " addresses: " + before + " -> " + after);
+		}
+	}
 }
 
 static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter) {
@@ -334,6 +366,10 @@ static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, 
 			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
 			offset += 2;
 		}
+	}
+
+	if (!offset) {
+		return "(null)";
 	}
 
 	return {buffer.data(), offset};
