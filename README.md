@@ -13,15 +13,13 @@ Control DALI lights using an ESP32-S2 over MQTT.
 `platformio run -t upload`
 
 ## Hardware interface
-The light switch is monitored using GPIO 17, which must be low when the switch is turned on.
-
 The DALI interface is on GPIO 16 (RX) and 18 (TX).
 
 The light switches are GPIO 11 and GPIO 12 (active low).
 
 ## Network interface
-Copy `src/config.h.example` to `src/config.h` to configure the WiFi network,
-MQTT hostname and MQTT topic (e.g. `dali`).
+Copy `src/fixed_config.h.example` to `src/fixed_config.h` to configure the WiFi
+network, MQTT hostname and MQTT topic (e.g. `dali`).
 
 ## MQTT interface
 

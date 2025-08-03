@@ -37,10 +37,10 @@
 #include <unordered_set>
 #include <vector>
 
-#if __has_include("config.h")
-# include "config.h"
+#if __has_include("fixed_config.h")
+# include "fixed_config.h"
 #else
-# include "config.h.example"
+# include "fixed_config.h.example"
 #endif
 
 static constexpr auto &FS = LittleFS;
