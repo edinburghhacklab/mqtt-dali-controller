@@ -42,7 +42,7 @@ values:
 dali/group/<name> [<00-3F>...] (retain)
 ```
 
-Delete a group by setting an empty value:
+Remove a group by setting an empty value:
 ```
 dali/group/<name> (null) (retain)
 ```

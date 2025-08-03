@@ -98,8 +98,12 @@ void setup() {
 		} else if (topic_str.rfind(group_prefix, 0) == 0) {
 			std::string group_name = topic_str.substr(group_prefix.length());
 
-			config.set_group_addresses(group_name, std::string{(const char *)payload, length});
-			lights.address_config_changed(group_name);
+			if (length) {
+				config.set_group_addresses(group_name, std::string{(const char *)payload, length});
+				lights.address_config_changed(group_name);
+			} else {
+				config.delete_group(group_name);
+			}
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
 			auto idx = preset_name.find("/");

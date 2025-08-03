@@ -164,10 +164,6 @@ std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
 		}
 	}
 
-	if (!offset) {
-		return "(null)";
-	}
-
 	return {buffer.data(), offset};
 }
 
@@ -745,12 +741,16 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 			address |= (addresses[0] - '0') << 4;
 		} else if (addresses[0] >= 'A' && addresses[0] <= 'F') {
 			address |= (addresses[0] - 'A' + 10) << 4;
+		} else {
+			break;
 		}
 
 		if (addresses[1] >= '0' && addresses[1] <= '9') {
 			address |= addresses[1] - '0';
 		} else if (addresses[1] >= 'A' && addresses[1] <= 'F') {
 			address |= addresses[1] - 'A' + 10;
+		} else {
+			break;
 		}
 
 		if (address <= MAX_ADDR) {
@@ -770,15 +770,13 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 				return;
 			}
 
-			current_.groups.emplace(group, std::move(lights));
+			current_.groups.emplace(group, lights);
 		} else {
 			it->second = lights;
 		}
 	}
 
-	auto after = group_addresses_text(group);
-
-	save_config();
+	auto after = addresses_text(lights);
 
 	if (before != after) {
 		if (group == BUILTIN_GROUP_ALL) {
@@ -793,6 +791,8 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		}
 	}
+
+	save_config();
 }
 
 void Config::delete_group(const std::string &name) {
@@ -802,14 +802,17 @@ void Config::delete_group(const std::string &name) {
 		return;
 	}
 
+	ESP_LOGE("lights", "Delete group %s", name.c_str());
 	network_.report("groups", std::string{"Group "} + name + ": "
 		+ quoted_string(group_addresses_text(name)) + " (deleted)");
 
 	current_.groups.erase(it);
 	network_.publish(std::string{MQTT_TOPIC} + "/group/" + name, "", true);
-	for (const auto &preset : current_.presets) {
-		network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/" + preset.first + "/active", "", true);
+	for (const auto &preset : preset_names()) {
+		network_.publish(std::string{MQTT_TOPIC} + "/active/" + name + "/" + preset, "", true);
 	}
+
+	save_config();
 }
 
 std::string Config::get_switch_name(unsigned int switch_id) {
@@ -957,8 +960,6 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 
 	auto after = preset_levels_text(it->second, true);
 
-	save_config();
-
 	if (before != after) {
 		publish_preset(it->first, it->second);
 	}
@@ -970,6 +971,8 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		network_.report("presets", std::string{"Preset "} + name + ": "
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
+
+	save_config();
 }
 
 void Config::set_preset(const std::string &name, std::string levels) {
@@ -1002,12 +1005,16 @@ void Config::set_preset(const std::string &name, std::string levels) {
 			level |= (levels[0] - '0') << 4;
 		} else if (levels[0] >= 'A' && levels[0] <= 'F') {
 			level |= (levels[0] - 'A' + 10) << 4;
+		} else {
+			break;
 		}
 
 		if (levels[1] >= '0' && levels[1] <= '9') {
 			level |= levels[1] - '0';
 		} else if (levels[1] >= 'A' && levels[1] <= 'F') {
 			level |= levels[1] - 'A' + 10;
+		} else {
+			break;
 		}
 
 		levels = levels.substr(2);
@@ -1017,13 +1024,13 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 	auto after = preset_levels_text(it->second, true);
 
-	save_config();
-
 	if (before != after) {
 		publish_preset(it->first, it->second);
 		network_.report("presets", std::string{"Preset "} + name + ": "
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
+
+	save_config();
 }
 
 void Config::delete_preset(const std::string &name) {
