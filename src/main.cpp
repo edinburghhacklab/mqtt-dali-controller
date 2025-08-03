@@ -28,6 +28,7 @@
 #include "lights.h"
 #include "network.h"
 #include "switches.h"
+#include "util.h"
 
 #if __has_include("fixed_config.h")
 # include "fixed_config.h"
@@ -35,27 +36,17 @@
 # include "fixed_config.h.example"
 #endif
 
-static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr unsigned int LED_GPIO = 38;
 
 static uint64_t last_uptime_us = 0;
 static bool startup_complete = false;
-
-struct SwitchState {
-	SwitchState() : value(LOW), report_us(0) {}
-
-	int value;
-	uint64_t report_us;
-};
-
-static std::array<SwitchState,NUM_SWITCHES> switch_state;
 
 static std::array<uint8_t,MAX_ADDR+1> tx_levels{};
 
 static Network network;
 static Config config{network};
 static Lights lights{network, config};
+static Switches switches{network, config, lights};
 
 namespace cbor = qindesign::cbor;
 
@@ -97,9 +88,9 @@ static void transmit_dali_all() {
 void setup() {
 	pinMode(TX_GPIO, OUTPUT);
 	digitalWrite(TX_GPIO, HIGH);
-	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		pinMode(SWITCH_GPIO[i], INPUT_PULLUP);
-	}
+
+	switches.setup();
+
 	pinMode(LED_GPIO, OUTPUT);
 	digitalWrite(LED_GPIO, LOW);
 
@@ -196,45 +187,9 @@ void setup() {
 }
 
 void loop() {
-	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		auto preset = config.get_switch_preset(i);
-		int switch_value = preset.empty() ? LOW : digitalRead(SWITCH_GPIO[i]);
-
-		if (switch_value != switch_state[i].value) {
-			switch_state[i].value = switch_value;
-
-			if (network.connected()) {
-				std::string name = config.get_switch_name(i);
-
-				if (name.empty()) {
-					name = "Light switch ";
-					name += std::to_string(i);
-				}
-
-				network.publish(std::string{MQTT_TOPIC}
-					+ "/switch/" + std::to_string(i) + "/state",
-					switch_state[i].value == LOW ? "1" : "0",
-					true);
-				switch_state[i].report_us = esp_timer_get_time();
-
-				network.report("switch", name + " "
-					+ (switch_state[i].value == LOW ? "ON" : "OFF")
-					+ " (levels reset to " + preset + ")");
-			}
-
-			auto addresses = config.get_switch_addresses(i);
-
-			lights.select_preset(preset, &addresses);
-		} else if (switch_state[i].report_us
-				&& esp_timer_get_time() - switch_state[i].report_us >= ONE_M) {
-			network.publish(std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i) + "/state",
-					switch_state[i].value == LOW ? "1" : "0",
-					true);
-			switch_state[i].report_us = esp_timer_get_time();
-		}
-	}
-
+	switches.loop();
 	transmit_dali_all();
+	lights.loop();
 
 	if (startup_complete && network.connected()) {
 		if (!last_uptime_us || esp_timer_get_time() - last_uptime_us >= ONE_M) {
@@ -243,8 +198,6 @@ void loop() {
 			last_uptime_us = esp_timer_get_time();
 		}
 	}
-
-	lights.loop();
 
 	network.loop([] () {
 		std::string topic = MQTT_TOPIC;

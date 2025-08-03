@@ -17,33 +17,5 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <array>
-
-static constexpr unsigned int NUM_SWITCHES = 2;
-static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
-
-class Config;
-class Lights;
-class Network;
-
-struct SwitchState {
-	SwitchState() : value(LOW), report_us(0) {}
-
-	int value;
-	uint64_t report_us;
-};
-
-class Switches {
-public:
-    Switches(Network &network, Config &config, Lights &lights);
-
-    void setup();
-    void loop();
-
-private:
-    Network &network_;
-    Config &config_;
-    Lights &lights_;
-    std::array<SwitchState,NUM_SWITCHES> state_;
-};
+static constexpr uint64_t ONE_S = 1000 * 1000ULL;
+static constexpr uint64_t ONE_M = 60 * ONE_S;

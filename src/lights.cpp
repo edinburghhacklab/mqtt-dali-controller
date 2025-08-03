@@ -27,15 +27,13 @@
 #include "config.h"
 #include "dali.h"
 #include "network.h"
+#include "util.h"
 
 #if __has_include("fixed_config.h")
 # include "fixed_config.h"
 #else
 # include "fixed_config.h.example"
 #endif
-
-static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr uint64_t ONE_M = 60 * ONE_S;
 
 Lights::Lights(Network &network, Config &config)
         : network_(network), config_(config) {

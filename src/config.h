@@ -36,32 +36,32 @@ namespace cbor = qindesign::cbor;
 
 class Network;
 
-struct SwitchData {
+struct ConfigSwitchData {
 	std::string name;
 	std::bitset<MAX_ADDR+1> lights;
 	std::string preset;
 
-	bool operator==(const SwitchData &other) const {
+	bool operator==(const ConfigSwitchData &other) const {
 		return this->name == other.name
 			&& this->lights == other.lights
 			&& this->preset == other.preset;
 	}
 
-	inline bool operator!=(const SwitchData &other) const { return !(*this == other); }
+	inline bool operator!=(const ConfigSwitchData &other) const { return !(*this == other); }
 };
 
-struct Data {
+struct ConfigData {
 	std::bitset<MAX_ADDR+1> lights;
-	std::array<SwitchData,NUM_SWITCHES> switches;
+	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::unordered_map<std::string, std::array<int16_t,MAX_ADDR+1>> presets;
 
-	bool operator==(const Data &other) const {
+	bool operator==(const ConfigData &other) const {
 		return this->lights == other.lights
 			&& this->switches == other.switches
 			&& this->presets == other.presets;
 	}
 
-	inline bool operator!=(const Data &other) const { return !(*this == other); }
+	inline bool operator!=(const ConfigData &other) const { return !(*this == other); }
 };
 
 class Config {
@@ -124,7 +124,7 @@ private:
 	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels);
 
 	Network &network_;
-	Data current_;
-	Data last_saved_;
+	ConfigData current_;
+	ConfigData last_saved_;
 	bool saved_{false};
 };
