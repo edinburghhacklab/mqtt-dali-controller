@@ -923,7 +923,9 @@ static void select_preset(const std::string &name,
 		return;
 	}
 
-	report("lights", std::string{"Preset = "} + name);
+	if (!filter) {
+		report("lights", std::string{"Preset = "} + name);
+	}
 
 	if (name == BUILTIN_PRESET_OFF) {
 		for (int i = 0; i < MAX_ADDR; i++) {
