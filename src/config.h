@@ -53,7 +53,7 @@ struct SwitchData {
 struct Data {
 	std::bitset<MAX_ADDR+1> lights;
 	std::array<SwitchData,NUM_SWITCHES> switches;
-	std::unordered_map<std::string, std::array<int,MAX_ADDR+1>> presets;
+	std::unordered_map<std::string, std::array<int16_t,MAX_ADDR+1>> presets;
 
 	bool operator==(const Data &other) const {
 		return this->lights == other.lights
@@ -90,12 +90,12 @@ public:
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
 	std::unordered_set<std::string> preset_names();
-	bool get_preset(const std::string &name, std::array<int,MAX_ADDR+1> &levels);
+	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels);
 	void set_preset(const std::string &name, const std::string &lights, long level);
 	void set_preset(const std::string &name, std::string levels);
 	void delete_preset(const std::string &name);
 
-	std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter);
+	std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels, bool filter);
 	std::string lights_text(const std::set<unsigned int> &light_ids);
 
 private:
@@ -115,13 +115,13 @@ private:
 	bool read_config_switch_lights(cbor::Reader &reader, unsigned int switch_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
-	bool read_config_preset_levels(cbor::Reader &reader, std::array<int,MAX_ADDR+1> &levels);
+	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
 
 	void save_config();
 	void write_config(cbor::Writer &writer);
 	bool write_config(const std::string &filename);
 
-	void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels);
+	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels);
 
 	Network &network_;
 	Data current_;

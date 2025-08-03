@@ -39,6 +39,9 @@ static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr unsigned int LED_GPIO = 38;
 
+static uint64_t last_uptime_us = 0;
+static bool startup_complete = false;
+
 struct SwitchState {
 	SwitchState() : value(LOW), report_us(0) {}
 
@@ -46,118 +49,15 @@ struct SwitchState {
 	uint64_t report_us;
 };
 
-static uint64_t last_uptime_us = 0;
-static bool startup_complete = false;
-
 static std::array<SwitchState,NUM_SWITCHES> switch_state;
 
-static std::array<uint8_t,MAX_ADDR+1> levels{};
 static std::array<uint8_t,MAX_ADDR+1> tx_levels{};
-static std::array<std::string,MAX_ADDR+1> active_presets{};
-static std::unordered_set<std::string> last_active_presets{};
-static bool republish_active_presets = true;
-static uint64_t last_published_active_presets_us = 0;
 
 static Network network;
 static Config config{network};
+static Lights lights{network, config};
 
 namespace cbor = qindesign::cbor;
-
-static void select_preset(const std::string &name,
-		std::bitset<MAX_ADDR+1> *filter = nullptr) {
-	const auto lights = config.get_addresses();
-	std::array<int,MAX_ADDR+1> preset_levels;
-
-	if (!config.get_preset(name, preset_levels)) {
-		return;
-	}
-
-	if (!filter) {
-		network.report("lights", std::string{"Preset = "} + name);
-	}
-
-	for (int i = 0; i < MAX_ADDR; i++) {
-		if (lights[i]) {
-			if (preset_levels[i] != -1) {
-				if (filter == nullptr || filter->test(i)) {
-					levels[i] = preset_levels[i];
-					active_presets[i] = name;
-					republish_active_presets = true;
-				}
-			}
-		} else {
-			levels[i] = 0;
-			if (!active_presets[i].empty()) {
-				active_presets[i] = "";
-			}
-		}
-	}
-}
-
-static void set_level(const std::string &lights, long level) {
-	if (level < 0 || level > MAX_LEVEL) {
-		return;
-	}
-
-	const auto addresses = config.get_addresses();
-	const auto light_ids = Config::parse_light_ids(lights);
-	unsigned int changed = 0;
-
-	for (int light_id : light_ids) {
-		if (!addresses[light_id]) {
-			continue;
-		}
-
-		levels[light_id] = level;
-		active_presets[light_id] = RESERVED_PRESET_CUSTOM;
-		republish_active_presets = true;
-		changed++;
-	}
-
-	if (!changed) {
-		return;
-	}
-
-	network.report("lights", config.lights_text(light_ids) + " = " + std::to_string(level));
-}
-
-static void publish_active_presets() {
-	bool force = !last_published_active_presets_us
-			|| esp_timer_get_time() - last_published_active_presets_us >= ONE_M;
-
-	if (!force && !republish_active_presets) {
-		return;
-	}
-
-	const auto lights = config.get_addresses();
-	const std::unordered_set<std::string> all = config.preset_names();
-	std::unordered_set<std::string> active;
-
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (lights[i]) {
-			active.insert(active_presets[i]);
-		}
-	}
-
-	for (const auto &preset : all) {
-		bool is_active = active.find(preset) != active.end();
-		bool last_active = last_active_presets.find(preset) != last_active_presets.end();
-
-		if (force || (is_active != last_active)) {
-			network.publish(std::string{MQTT_TOPIC} + "/preset/" + preset + "/active", is_active ? "1" : "0", true);
-		}
-
-		if (is_active) {
-			last_active_presets.insert(preset);
-		} else {
-			last_active_presets.erase(preset);
-		}
-	}
-
-	if (force) {
-		last_published_active_presets_us = esp_timer_get_time();
-	}
-}
 
 static void transmit_dali_one(unsigned int address, unsigned int level) {
 	if (address > MAX_ADDR || level > MAX_LEVEL) {
@@ -170,12 +70,17 @@ static void transmit_dali_one(unsigned int address, unsigned int level) {
 static void transmit_dali_all() {
 	static uint64_t last_dali_us = 0;
 	bool repeat = !last_dali_us || esp_timer_get_time() - last_dali_us >= ONE_S;
+	auto levels = lights.get_levels();
 
 	if (repeat || levels != tx_levels) {
 		const auto lights = config.get_addresses();
 
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 			if (lights[i]) {
+				/*
+				 * Only transmit changed levels immediately, to improve
+				 * responsiveness when dimming with a rotary encoder.
+				 */
 				if (repeat || levels[i] != tx_levels[i]) {
 					transmit_dali_one(i, levels[i]);
 				}
@@ -198,8 +103,6 @@ void setup() {
 	pinMode(LED_GPIO, OUTPUT);
 	digitalWrite(LED_GPIO, LOW);
 
-	active_presets.fill(RESERVED_PRESET_UNKNOWN);
-
 	config.setup();
 
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
@@ -220,6 +123,7 @@ void setup() {
 			if (!startup_complete) {
 				ESP_LOGE("main", "Startup complete");
 				startup_complete = true;
+				lights.startup_complete(true);
 				config.publish_config();
 			}
 		} else if (topic_str == "/reboot") {
@@ -227,16 +131,16 @@ void setup() {
 		} else if (topic_str == "/reload") {
 			config.load_config();
 			config.publish_config();
-			republish_active_presets = true;
+			lights.address_config_changed();
 		} else if (topic_str == "/addresses") {
 			config.set_addresses(std::string{(const char*)payload, length});
-			republish_active_presets = true;
+			lights.address_config_changed();
 		} else if (topic_str == "/switch/0/addresses") {
 			config.set_switch_addresses(0, std::string{(const char*)payload, length});
-			republish_active_presets = true;
+			lights.address_config_changed();
 		} else if (topic_str == "/switch/1/addresses") {
 			config.set_switch_addresses(1, std::string{(const char*)payload, length});
-			republish_active_presets = true;
+			lights.address_config_changed();
 		} else if (topic_str == "/switch/0/name") {
 			config.set_switch_name(0, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/1/name") {
@@ -250,7 +154,7 @@ void setup() {
 			auto idx = preset_name.find("/");
 
 			if (idx == std::string::npos) {
-				select_preset(preset_name);
+				lights.select_preset(preset_name);
 			} else {
 				std::string light_id = preset_name.substr(idx + 1);
 
@@ -286,7 +190,7 @@ void setup() {
 				return;
 			}
 
-			set_level(light_id, value);
+			lights.set_level(light_id, value);
 		}
 	});
 }
@@ -318,9 +222,9 @@ void loop() {
 					+ " (levels reset to " + preset + ")");
 			}
 
-			auto lights = config.get_switch_addresses(i);
+			auto addresses = config.get_switch_addresses(i);
 
-			select_preset(preset, &lights);
+			lights.select_preset(preset, &addresses);
 		} else if (switch_state[i].report_us
 				&& esp_timer_get_time() - switch_state[i].report_us >= ONE_M) {
 			network.publish(std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i) + "/state",
@@ -338,14 +242,15 @@ void loop() {
 				std::to_string(esp_timer_get_time()));
 			last_uptime_us = esp_timer_get_time();
 		}
-
-		publish_active_presets();
 	}
+
+	lights.loop();
 
 	network.loop([] () {
 		std::string topic = MQTT_TOPIC;
 
 		startup_complete = false;
+		lights.startup_complete(false);
 
 		network.subscribe("meta/mqtt-agents/poll");
 		network.subscribe(topic + "/reboot");

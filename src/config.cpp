@@ -143,7 +143,7 @@ std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
 	return {buffer.data(), offset};
 }
 
-std::string Config::preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter) {
+std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels, bool filter) {
 	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
 	size_t offset = 0;
 
@@ -403,7 +403,7 @@ bool Config::read_config_preset(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
-	std::array<int,MAX_ADDR+1> levels;
+	std::array<int16_t,MAX_ADDR+1> levels;
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
@@ -450,7 +450,7 @@ bool Config::read_config_preset(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_preset_levels(cbor::Reader &reader, std::array<int,MAX_ADDR+1> &levels) {
+bool Config::read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -590,7 +590,7 @@ void Config::publish_config() {
 	}
 }
 
-void Config::publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
+void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) {
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels",
 		preset_levels_text(levels, false), true);
 }
@@ -729,7 +729,7 @@ std::unordered_set<std::string> Config::preset_names() {
 	return all;
 }
 
-bool Config::get_preset(const std::string &name, std::array<int,MAX_ADDR+1> &levels) {
+bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) {
 	if (name == BUILTIN_PRESET_OFF) {
 		levels.fill(0);
 	} else {
@@ -762,7 +762,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 			return;
 		}
 
-		std::array<int,MAX_ADDR+1> levels;
+		std::array<int16_t,MAX_ADDR+1> levels;
 
 		levels.fill(-1);
 		it = current_.presets.emplace(name, std::move(levels)).first;
@@ -809,7 +809,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 			return;
 		}
 
-		std::array<int,MAX_ADDR+1> empty_levels;
+		std::array<int16_t,MAX_ADDR+1> empty_levels;
 
 		empty_levels.fill(-1);
 		it = current_.presets.emplace(name, std::move(empty_levels)).first;

@@ -17,7 +17,40 @@
 
 #pragma once
 
+#include <array>
+#include <bitset>
 #include <string>
+#include <unordered_set>
+
+#include "dali.h"
 
 static const std::string RESERVED_PRESET_CUSTOM = "custom";
 static const std::string RESERVED_PRESET_UNKNOWN = "unknown";
+
+class Config;
+class Network;
+
+class Lights {
+public:
+    Lights(Network &network, Config &config);
+
+    void loop();
+    void startup_complete(bool state);
+    void address_config_changed();
+
+    std::array<uint8_t,MAX_ADDR+1> get_levels() const;
+    void select_preset(const std::string &name, std::bitset<MAX_ADDR+1> *filter = nullptr);
+    void set_level(const std::string &lights, long level);
+
+private:
+    void publish_active_presets();
+
+    Network &network_;
+    Config &config_;
+    bool startup_complete_{false};
+    std::array<uint8_t,MAX_ADDR+1> levels_{};
+    std::array<std::string,MAX_ADDR+1> active_presets_{};
+    std::unordered_set<std::string> last_active_presets_{};
+    bool republish_active_presets_{true};
+    uint64_t last_published_active_presets_us_{0};
+};
