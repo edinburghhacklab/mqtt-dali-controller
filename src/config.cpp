@@ -964,7 +964,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 	}
 
 	network_.report("presets", std::string{"Preset "} + name + ": "
-		+ quoted_string(lights_text(light_ids)) + " = " + std::to_string(level));
+		+ lights_text(light_ids) + " = " + std::to_string(level));
 
 	if (before != after) {
 		network_.report("presets", std::string{"Preset "} + name + ": "
