@@ -16,6 +16,9 @@
  */
 
 #include "network.h"
+
+#include <Arduino.h>
+#include <esp_timer.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 
