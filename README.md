@@ -129,3 +129,27 @@ Reboot:
 ```
 dali/reboot (null)
 ```
+
+### OTA Updates
+
+Query status:
+
+```
+dali/status (null)
+```
+
+Responses are `dali/g0/application/#` and `dali/g0/partition/#`.
+
+Perform update:
+
+```
+dali/ota/update (null)
+dali/reboot (null)
+```
+
+Verify update:
+
+```
+dali/ota/good (null)
+dali/ota/bad (null)
+```

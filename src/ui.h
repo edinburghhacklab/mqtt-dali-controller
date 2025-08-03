@@ -30,12 +30,18 @@ public:
 	void loop();
 	void startup_complete(bool state);
 	void status_report();
+	void ota_update();
+	void ota_good();
+	void ota_bad();
 
 private:
 	static constexpr unsigned int LED_GPIO = 38;
 
+	void publish_application();
 	void publish_partitions();
 	void publish_uptime();
+
+	void ota_result(bool good);
 
 	Network &network_;
 	Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};

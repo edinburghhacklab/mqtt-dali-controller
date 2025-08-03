@@ -4,3 +4,4 @@ static constexpr const char *MQTT_HOSTNAME = "mqtt.example";
 static constexpr int MQTT_PORT = 1883;
 static constexpr const char *MQTT_TOPIC = "dali";
 static constexpr const char *IRC_CHANNEL = "#example";
+static constexpr const char *OTA_URL = "https://example.test/firmware.bin";

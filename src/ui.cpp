@@ -18,6 +18,8 @@
 #include "ui.h"
 
 #include <Arduino.h>
+#include <esp_crt_bundle.h>
+#include <esp_https_ota.h>
 #include <esp_ota_ops.h>
 #include <esp_timer.h>
 
@@ -26,6 +28,9 @@
 
 #include "network.h"
 #include "util.h"
+
+extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t x509_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
 
 UI::UI(Network &network) : network_(network) {
 }
@@ -58,8 +63,19 @@ static const char *ota_state_string(esp_ota_img_states_t state) {
 }
 
 void UI::status_report() {
+	publish_application();
 	publish_partitions();
 	publish_uptime();
+}
+
+void UI::publish_application() {
+	const esp_app_desc_t *desc = esp_ota_get_app_description();
+	std::string topic = std::string{MQTT_TOPIC} + "/application";
+
+	network_.publish(topic + "/name", null_terminated_string(desc->project_name));
+	network_.publish(topic + "/version", null_terminated_string(desc->version));
+	network_.publish(topic + "/idf_ver", null_terminated_string(desc->idf_ver));
+	network_.publish(topic + "/timestamp", null_terminated_string(desc->date) + " " + null_terminated_string(desc->time));
 }
 
 void UI::publish_partitions() {
@@ -101,6 +117,7 @@ void UI::publish_partitions() {
 		if (!esp_ota_get_partition_description(part, &desc)) {
 			network_.publish(topic + "/name", null_terminated_string(desc.project_name));
 			network_.publish(topic + "/version", null_terminated_string(desc.version));
+			network_.publish(topic + "/idf_ver", null_terminated_string(desc.idf_ver));
 			network_.publish(topic + "/timestamp", null_terminated_string(desc.date) + " " + null_terminated_string(desc.time));
 		}
 	}
@@ -113,6 +130,10 @@ void UI::publish_uptime() {
 }
 
 void UI::setup() {
+	if (x509_crt_bundle_end - x509_crt_bundle_start >= 2) {
+		arduino_esp_crt_bundle_set(x509_crt_bundle_start);
+	}
+
 	led_.begin();
 }
 
@@ -125,6 +146,75 @@ void UI::loop() {
 	if (startup_complete_ && network_.connected()) {
 		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M) {
 			publish_uptime();
+		}
+	}
+}
+
+void UI::ota_update() {
+	esp_http_client_config_t http_config{};
+	esp_https_ota_config_t ota_config{};
+	esp_https_ota_handle_t handle{};
+
+	ESP_LOGE("ota", "OTA update");
+
+	http_config.crt_bundle_attach = arduino_esp_crt_bundle_attach;
+	http_config.disable_auto_redirect = true;
+	http_config.url = OTA_URL;
+	ota_config.http_config = &http_config;
+
+	esp_err_t err = esp_https_ota_begin(&ota_config, &handle);
+	if (err) {
+		network_.report("ota", std::string{"OTA begin failed: "} + std::to_string(err));
+		return;
+	}
+
+	const int size = esp_https_ota_get_image_size(handle);
+
+	network_.report("ota", std::string{"OTA size: "} + std::to_string(size));
+
+	while (true) {
+		err = esp_https_ota_perform(handle);
+
+		if (err == ESP_OK) {
+			err = esp_https_ota_finish(handle);
+			if (err) {
+				network_.report("ota", std::string{"OTA finish failed: "} + std::to_string(err));
+			} else {
+				network_.report("ota", std::string{"OTA finished"});
+			}
+			publish_partitions();
+			return;
+		} else if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
+			network_.report("ota", std::string{"OTA perform failed: "} + std::to_string(err));
+			esp_https_ota_abort(handle);
+			publish_partitions();
+			return;
+		}
+	}
+}
+
+void UI::ota_good() {
+	ota_result(true);
+}
+
+void UI::ota_bad() {
+	ota_result(false);
+}
+
+void UI::ota_result(bool good) {
+	esp_ota_img_states_t state;
+
+	if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &state)) {
+		state = ESP_OTA_IMG_UNDEFINED;
+	}
+
+	if (state == ESP_OTA_IMG_PENDING_VERIFY) {
+		if (good) {
+			ESP_LOGE("ota", "OTA good");
+			esp_ota_mark_app_valid_cancel_rollback();
+		} else {
+			ESP_LOGE("ota", "OTA bad");
+			esp_ota_mark_app_invalid_rollback_and_reboot();
 		}
 	}
 }

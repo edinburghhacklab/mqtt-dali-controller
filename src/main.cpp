@@ -95,6 +95,12 @@ void setup() {
 			lights.address_config_changed();
 		} else if (topic_str == "/status") {
 			ui.status_report();
+		} else if (topic_str == "/ota/update") {
+			ui.ota_update();
+		} else if (topic_str == "/ota/good") {
+			ui.ota_good();
+		} else if (topic_str == "/ota/bad") {
+			ui.ota_bad();
 		} else if (topic_str == "/addresses") {
 			config.set_addresses(std::string{(const char*)payload, length});
 			lights.address_config_changed(BUILTIN_GROUP_ALL);
@@ -182,11 +188,12 @@ void loop() {
 
 		set_startup_complete(false);
 
+		network.subscribe(topic + "/startup_complete");
 		network.subscribe("meta/mqtt-agents/poll");
 		network.subscribe(topic + "/reboot");
 		network.subscribe(topic + "/reload");
 		network.subscribe(topic + "/status");
-		network.subscribe(topic + "/startup_complete");
+		network.subscribe(topic + "/ota/+");
 		network.subscribe(topic + "/addresses");
 		network.subscribe(topic + "/group/+");
 		network.subscribe(topic + "/switch/0/group");
