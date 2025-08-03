@@ -25,6 +25,7 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <iostream>
@@ -51,6 +52,8 @@ static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr unsigned int NUM_SWITCHES = 2;
 static constexpr size_t MAX_PRESETS = 50;
 static constexpr size_t MAX_PRESET_NAME_LEN = 50;
+static constexpr size_t MAX_SWITCH_NAME_LEN = 50;
+static constexpr size_t MAX_TEXT_LEN = 256;
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 static constexpr unsigned int LED_GPIO = 38;
 static constexpr unsigned int RX_GPIO = 40;
@@ -121,6 +124,68 @@ static uint64_t last_published_active_presets_us = 0;
 
 namespace cbor = qindesign::cbor;
 
+static bool valid_preset_name(const std::string &name) {
+	if (name == BUILTIN_PRESET_OFF
+			|| name == RESERVED_PRESET_CUSTOM
+			|| name == RESERVED_PRESET_UNKNOWN
+			|| name.empty()
+			|| name.length() > MAX_PRESET_NAME_LEN) {
+		return false;
+	}
+
+	for (size_t i = 0; i < name.length(); i++) {
+		if (name[i] >= '0' && name[i] <= '9') {
+			continue;
+		} else if (name[i] >= 'a' && name[i] <= 'z') {
+			continue;
+		} else if (name[i] == '.' || name[i] == '-' || name[i] == '_') {
+			continue;
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
+static std::string addresses_text(int switch_id) {
+	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+	size_t offset = 0;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (switch_id == -1
+				? current_config.lights[i]
+					: current_config.switches[switch_id].lights[i]) {
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFF));
+			offset += 2;
+		}
+	}
+
+	if (!offset) {
+		return "(null)";
+	}
+
+	return {buffer.data(), offset};
+}
+
+static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter) {
+	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+	size_t offset = 0;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (current_config.lights[i]) {
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+			offset += 2;
+		}
+	}
+
+	if (!offset) {
+		return "(null)";
+	}
+
+	return {buffer.data(), offset};
+}
+
 static void json_append_escape(std::string &output, const std::string_view value) {
 	for (size_t i = 0; i < value.length(); i++) {
 		if (value[i] == '"' || value[i] == '\\') {
@@ -149,7 +214,284 @@ static void report(const char *tag, const std::string &message) {
 	}
 }
 
+static bool readText(cbor::Reader &reader, std::string &text, size_t max_length) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectText(reader, &length, &indefinite) || indefinite)
+			return false;
+
+	if (length > max_length)
+			return false;
+
+	std::vector<char> data(length + 1);
+
+	if (cbor::readFully(reader, reinterpret_cast<uint8_t*>(data.data()), length) != length)
+			return false;
+
+	text = {data.data()};
+	return true;
+}
+
+static bool read_config_lights(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		bool value;
+
+		if (!cbor::expectBoolean(reader, &value)) {
+			return false;
+		}
+
+		if (i <= MAX_ADDR) {
+			current_config.lights[i] = value;
+			i++;
+		}
+	}
+
+	ESP_LOGE("config", "Lights = %s", addresses_text(-1).c_str());
+
+	return true;
+}
+
+static bool read_config_switch_lights(cbor::Reader &reader, unsigned int switch_id) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		bool value;
+
+		if (!cbor::expectBoolean(reader, &value)) {
+			return false;
+		}
+
+		if (i <= MAX_ADDR) {
+			current_config.switches[switch_id].lights[i] = value;
+			i++;
+		}
+	}
+
+	ESP_LOGE("config", "Switch %u lights = %s", switch_id, addresses_text(switch_id).c_str());
+
+	return true;
+}
+
+static bool read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "name") {
+			std::string name;
+
+			if (!readText(reader, name, UINT8_MAX)) {
+				return false;
+			}
+
+			ESP_LOGE("config", "Switch %u name = %s", switch_id, name.c_str());
+			current_config.switches[switch_id].name = name;
+		} else if (key == "lights") {
+			if (!read_config_switch_lights(reader, switch_id)) {
+				return false;
+			}
+		} else if (key == "preset") {
+			std::string preset;
+
+			if (!readText(reader, preset, UINT8_MAX)) {
+				return false;
+			}
+
+			ESP_LOGE("config", "Switch %u preset = %s", switch_id, preset.c_str());
+			current_config.switches[switch_id].preset = preset;
+		} else {
+			ESP_LOGE("config", "Unknown switch %u key: %s", switch_id, key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+static bool read_config_switches(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (i < NUM_SWITCHES) {
+			if (!read_config_switch(reader, i)) {
+				return false;
+			}
+
+			i++;
+		} else {
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+static bool read_config_preset_levels(cbor::Reader &reader, std::array<int,MAX_ADDR+1> &levels) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		int64_t value;
+
+		if (!cbor::expectInt(reader, &value)) {
+			return false;
+		}
+
+		if (i <= MAX_ADDR) {
+			if (value >= -1 && value <= MAX_LEVEL) {
+				levels[i] = value;
+			}
+			i++;
+		}
+	}
+
+	return true;
+}
+
+static bool read_config_preset(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	std::string name;
+	std::array<int,MAX_ADDR+1> levels;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	levels.fill(-1);
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "name") {
+			if (!readText(reader, name, UINT8_MAX)) {
+				return false;
+			}
+		} else if (key == "levels") {
+			if (!read_config_preset_levels(reader, levels)) {
+				return false;
+			}
+		} else {
+			ESP_LOGE("config", "Unknown preset key: %s", key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	if (valid_preset_name(name)) {
+		auto result = current_config.presets.emplace(name, std::move(levels));
+
+		if (result.second) {
+			ESP_LOGE("config", "Preset %s = %s", name.c_str(), preset_levels_text(result.first->second, false).c_str());
+		} else {
+			ESP_LOGE("config", "Ignoring duplicate preset: %s", name.c_str());
+		}
+	} else {
+		ESP_LOGE("config", "Ignoring invalid preset: %s", name.c_str());
+	}
+
+	return true;
+}
+
+static bool read_config_presets(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (!read_config_preset(reader)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static bool read_config(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "lights") {
+			if (!read_config_lights(reader)) {
+				return false;
+			}
+		} else if (key == "switches") {
+			if (!read_config_switches(reader)) {
+				return false;
+			}
+		} else if (key == "presets") {
+			if (!read_config_presets(reader)) {
+				return false;
+			}
+		} else {
+			ESP_LOGE("config", "Unknown key: %s", key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
 
 	return true;
 }
@@ -167,13 +509,18 @@ static bool read_config(const std::string &filename, bool load) {
 			return false;
 		} else {
 			if (load) {
-				ESP_LOGE("config", "Loading config from file ", filename.c_str());
+				ESP_LOGE("config", "Loading config from file %s", filename.c_str());
 				file.seek(0);
 
 				if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag))
 					return false;
 
-				return read_config(reader);
+				if (read_config(reader)) {
+					ESP_LOGE("config", "Loaded config from file %s", filename.c_str());
+				} else {
+					ESP_LOGE("config", "Invalid config file %s", filename.c_str());
+				}
+
 			}
 			return true;
 		}
@@ -193,8 +540,10 @@ static void load_config() {
 }
 
 static void writeText(cbor::Writer &writer, const std::string &value) {
-	writer.beginText(value.length());
-	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), value.length());
+	size_t length = std::min(value.length(), MAX_TEXT_LEN);
+
+	writer.beginText(length);
+	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), length);
 }
 
 static void write_config(cbor::Writer &writer) {
@@ -284,34 +633,14 @@ static void save_config() {
 	}
 }
 
-static std::string addresses_text(int switch_id) {
-	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
-	size_t offset = 0;
-
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (switch_id == -1
-				? current_config.lights[i]
-					: current_config.switches[switch_id].lights[i]) {
-			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFF));
-			offset += 2;
-		}
-	}
-
-	if (!offset) {
-		return "(null)";
-	}
-
-	return {buffer.data(), offset};
-}
-
 static void configure_addresses(int switch_id, std::string addresses) {
 	auto before = addresses_text(switch_id);
 
 	if (switch_id == -1) {
-		ESP_LOGE("lights", "Configure light addresses");
+		ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
 		current_config.lights.fill(false);
 	} else {
-		ESP_LOGE("lights", "Configure light switch addresses");
+		ESP_LOGE("lights", "Configure light switch addresses: %s", addresses.c_str());
 		current_config.switches[switch_id].lights.fill(false);
 	}
 
@@ -332,10 +661,8 @@ static void configure_addresses(int switch_id, std::string addresses) {
 
 		if (address <= MAX_ADDR) {
 			if (switch_id == -1) {
-				ESP_LOGE("lights", "Light %u added", address);
 				current_config.lights[address] = true;
 			} else {
-				ESP_LOGE("lights", "Light %u added to switch %u", address, switch_id);
 				current_config.switches[switch_id].lights[address] = true;
 			}
 		}
@@ -357,51 +684,9 @@ static void configure_addresses(int switch_id, std::string addresses) {
 	}
 }
 
-static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels, bool filter) {
-	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
-	size_t offset = 0;
-
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (current_config.lights[i]) {
-			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
-			offset += 2;
-		}
-	}
-
-	if (!offset) {
-		return "(null)";
-	}
-
-	return {buffer.data(), offset};
-}
-
 static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
 	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
 		preset_levels_text(levels, false).c_str(), true);
-}
-
-static bool valid_preset_name(const std::string &name) {
-	if (name == BUILTIN_PRESET_OFF
-			|| name == RESERVED_PRESET_CUSTOM
-			|| name == RESERVED_PRESET_UNKNOWN
-			|| name.empty()
-			|| name.length() > MAX_PRESET_NAME_LEN) {
-		return false;
-	}
-
-	for (size_t i = 0; i < name.length(); i++) {
-		if (name[i] >= '0' && name[i] <= '9') {
-			continue;
-		} else if (name[i] >= 'a' && name[i] <= 'z') {
-			continue;
-		} else if (name[i] == '.' || name[i] == '-' || name[i] == '_') {
-			continue;
-		}
-
-		return false;
-	}
-
-	return true;
 }
 
 static std::set<unsigned int> parse_light_ids(const std::string &light_id) {
@@ -518,7 +803,7 @@ static void configure_preset(const std::string &name, const std::string &lights,
 			return;
 		}
 
-		std::array<int, MAX_ADDR+1> levels;
+		std::array<int,MAX_ADDR+1> levels;
 
 		levels.fill(-1);
 		it = current_config.presets.emplace(name, std::move(levels)).first;
@@ -745,13 +1030,21 @@ void setup() {
 		} else if (topic_str == "/switch/1/addresses") {
 			configure_addresses(1, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/0/name") {
-			current_config.switches[0].name = std::string{(const char*)payload, length};
+			current_config.switches[0].name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
 		} else if (topic_str == "/switch/1/name") {
-			current_config.switches[1].name = std::string{(const char*)payload, length};
+			current_config.switches[1].name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
 		} else if (topic_str == "/switch/0/preset") {
-			current_config.switches[0].preset = std::string{(const char*)payload, length};
+			auto preset = std::string{(const char*)payload, length};
+
+			if (valid_preset_name(preset)) {
+				current_config.switches[0].preset = preset;
+			}
 		} else if (topic_str == "/switch/1/preset") {
-			current_config.switches[1].preset = std::string{(const char*)payload, length};
+			auto preset = std::string{(const char*)payload, length};
+
+			if (valid_preset_name(preset)) {
+				current_config.switches[1].preset = preset;
+			}
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
 			auto idx = preset_name.find("/");
