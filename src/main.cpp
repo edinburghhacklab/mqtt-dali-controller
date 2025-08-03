@@ -46,7 +46,9 @@ struct SwitchState {
 	uint64_t report_us;
 };
 
+static uint64_t last_uptime_us = 0;
 static bool startup_complete = false;
+
 static std::array<SwitchState,NUM_SWITCHES> switch_state;
 
 static std::array<uint8_t,MAX_ADDR+1> levels{};
@@ -331,6 +333,12 @@ void loop() {
 	transmit_dali_all();
 
 	if (startup_complete && network.connected()) {
+		if (!last_uptime_us || esp_timer_get_time() - last_uptime_us >= ONE_M) {
+			network.publish(std::string{MQTT_TOPIC} + "/uptime_us",
+				std::to_string(esp_timer_get_time()));
+			last_uptime_us = esp_timer_get_time();
+		}
+
 		publish_active_presets();
 	}
 
