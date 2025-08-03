@@ -46,6 +46,7 @@ static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr unsigned int NUM_SWITCHES = 2;
 static constexpr size_t MAX_PRESETS = 50;
+static constexpr size_t MAX_PRESET_NAME_LEN = 50;
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 static constexpr unsigned int LED_GPIO = 38;
 static constexpr unsigned int RX_GPIO = 40;
@@ -128,7 +129,7 @@ static void json_append_escape(std::string &output, const std::string_view value
 static void report(const char *tag, const std::string &message) {
 	ESP_LOGE(tag, "%s", message.c_str());
 
-	if (wifi_up && mqtt.connected()) {
+	if (wifi_up && mqtt.connected() && IRC_CHANNEL[0]) {
 		std::string payload;
 
 		payload.reserve(MQTT_MAX_PACKET_SIZE);
@@ -317,6 +318,44 @@ static void configure_addresses(int switch_id, std::string addresses) {
 	}
 
 	save_config();
+	republish_active_presets = true;
+}
+
+static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
+	std::vector<char> payload(2 * (MAX_ADDR + 1) + 1);
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		snprintf(&payload[2 * i], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+	}
+
+	payload[payload.size() - 1] = 0;
+
+	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
+		payload.data(), true);
+}
+
+static bool valid_preset_name(const std::string &name) {
+	if (name == BUILTIN_PRESET_OFF
+			|| name == RESERVED_PRESET_CUSTOM
+			|| name == RESERVED_PRESET_UNKNOWN
+			|| name.empty()
+			|| name.length() > MAX_PRESET_NAME_LEN) {
+		return false;
+	}
+
+	for (size_t i = 0; i < name.length(); i++) {
+		if (name[i] >= '0' && name[i] <= '9') {
+			continue;
+		} else if (name[i] >= 'a' && name[i] <= 'z') {
+			continue;
+		} else if (name[i] == '.' || name[i] == '-' || name[i] == '_') {
+			continue;
+		}
+
+		return false;
+	}
+
+	return true;
 }
 
 static void configure_preset(const std::string &name, int light_id, int level) {
@@ -330,9 +369,7 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 		return;
 	}
 
-	if (name == BUILTIN_PRESET_OFF
-			|| name == RESERVED_PRESET_CUSTOM
-			|| name == RESERVED_PRESET_UNKNOWN) {
+	if (!valid_preset_name(name)) {
 		return;
 	}
 
@@ -345,13 +382,15 @@ static void configure_preset(const std::string &name, int light_id, int level) {
 
 		levels.fill(-1);
 		levels[light_id] = level;
-		current_config.presets.emplace(name, std::move(levels));
+		current_config.presets.emplace(name, levels);
 		save_config();
+		publish_preset(name, levels);
 		return;
 	}
 
 	it->second[light_id] = level;
 	save_config();
+	publish_preset(it->first, it->second);
 }
 
 static void select_preset(const std::string &name,
@@ -394,6 +433,7 @@ static void delete_preset(const std::string &name) {
 
 	current_config.presets.erase(it);
 	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/active").c_str(), "", true);
+	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(), "", true);
 }
 
 static void set_level(int light_id, int level) {
@@ -438,7 +478,9 @@ static void publish_active_presets() {
 	}
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		active.insert(active_presets[i]);
+		if (current_config.lights[i]) {
+			active.insert(active_presets[i]);
+		}
 	}
 
 	for (const auto &preset : all) {
@@ -658,23 +700,25 @@ void loop() {
 			mqtt.connect(device_id.c_str());
 
 			if (mqtt.connected()) {
+				std::string topic = MQTT_TOPIC;
+
 				ESP_LOGE("network", "MQTT connected");
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/reboot").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/reload").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/startup_complete").c_str());
+				mqtt.subscribe((topic + "/reboot").c_str());
+				mqtt.subscribe((topic + "/reload").c_str());
+				mqtt.subscribe((topic + "/startup_complete").c_str());
 				mqtt.subscribe("meta/mqtt-agents/poll");
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/addresses").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/addresses").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/addresses").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/name").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/name").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/0/preset").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/switch/1/preset").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/preset/+").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/preset/+/+").c_str());
-				mqtt.subscribe((std::string{MQTT_TOPIC} + "/set/+").c_str());
+				mqtt.subscribe((topic + "/addresses").c_str());
+				mqtt.subscribe((topic + "/switch/0/addresses").c_str());
+				mqtt.subscribe((topic + "/switch/1/addresses").c_str());
+				mqtt.subscribe((topic + "/switch/0/name").c_str());
+				mqtt.subscribe((topic + "/switch/1/name").c_str());
+				mqtt.subscribe((topic + "/switch/0/preset").c_str());
+				mqtt.subscribe((topic + "/switch/1/preset").c_str());
+				mqtt.subscribe((topic + "/preset/+").c_str());
+				mqtt.subscribe((topic + "/preset/+/+").c_str());
+				mqtt.subscribe((topic + "/set/+").c_str());
 				mqtt.publish("meta/mqtt-agents/announce", device_id.c_str());
-				mqtt.publish((std::string{MQTT_TOPIC} + "/startup_complete").c_str(), "");
+				mqtt.publish((topic + "/startup_complete").c_str(), "");
 			} else {
 				ESP_LOGE("network", "MQTT connection failed");
 			}

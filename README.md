@@ -30,7 +30,7 @@ MQTT hostname and MQTT topic (e.g. `dali`).
 Configure which lights are present by listing them as uppercase hexadecimal
 values:
 ```
-dali/addresses [<00-3F>...]
+dali/addresses [<00-3F>...] (retain)
 ```
 
 ### Switches
@@ -38,9 +38,9 @@ dali/addresses [<00-3F>...]
 Configure which light switches are present by listing the lights as uppercase
 hexadecimal values and configuring the default preset:
 ```
-dali/switch/<0-1>/name [name]
-dali/switch/<0-1>/addresses [<00-3F>...]
-dali/switch/<0-1>/preset <name>
+dali/switch/<0-1>/name [name] (retain)
+dali/switch/<0-1>/addresses [<00-3F>...] (retain)
+dali/switch/<0-1>/preset <name> (retain)
 ```
 
 Light switch status is reported as `dali/switch/<0-1>/state` when it changes
@@ -56,6 +56,14 @@ dali/preset/comfort/<0-63> (null)
 ```
 
 The reserved preset names `off`, `custom` and `unknown` can't be configured.
+
+The maximum length of a preset name is 50 characters and they can only contain
+lowercase alphanumeric characters as well as `.`, `-` and `_`.
+
+Presets will be republished with light level values for all addresses in order:
+```
+dali/preset/<name>/levels <00-FF>... (retain)
+```
 
 The active presets are reported as `dali/preset/<name>/active` when they change
 and then every 60 seconds. It's possible for multiple presets to be active as
