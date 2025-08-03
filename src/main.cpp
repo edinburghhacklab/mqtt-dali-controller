@@ -322,8 +322,12 @@ static bool read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 				return false;
 			}
 
-			ESP_LOGE("config", "Switch %u preset = %s", switch_id, preset.c_str());
-			current_config.switches[switch_id].preset = preset;
+			if (valid_preset_name(preset)) {
+				ESP_LOGE("config", "Switch %u preset = %s", switch_id, preset.c_str());
+				current_config.switches[switch_id].preset = preset;
+			} else {
+				ESP_LOGE("config", "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
+			}
 		} else {
 			ESP_LOGE("config", "Unknown switch %u key: %s", switch_id, key.c_str());
 
@@ -1110,20 +1114,40 @@ void setup() {
 		} else if (topic_str == "/switch/1/addresses") {
 			configure_addresses(1, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/0/name") {
-			current_config.switches[0].name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
+			auto name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
+
+			if (current_config.switches[0].name != name) {
+				report("switch", std::string{"Switch 0 name: "} + current_config.switches[0].name + " -> " + name);
+
+				current_config.switches[0].name = name;
+				save_config();
+			}
 		} else if (topic_str == "/switch/1/name") {
-			current_config.switches[1].name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
+			auto name = std::string{(const char*)payload, length}.substr(0, MAX_SWITCH_NAME_LEN);
+
+			if (current_config.switches[1].name != name) {
+				report("switch", std::string{"Switch 1 name: "} + current_config.switches[1].name + " -> " + name);
+
+				current_config.switches[1].name = name;
+				save_config();
+			}
 		} else if (topic_str == "/switch/0/preset") {
 			auto preset = std::string{(const char*)payload, length};
 
-			if (valid_preset_name(preset)) {
+			if (valid_preset_name(preset) && current_config.switches[0].preset != preset) {
+				report("switch", std::string{"Switch 0 preset: "} + current_config.switches[0].preset + " -> " + preset);
+
 				current_config.switches[0].preset = preset;
+				save_config();
 			}
 		} else if (topic_str == "/switch/1/preset") {
 			auto preset = std::string{(const char*)payload, length};
 
-			if (valid_preset_name(preset)) {
+			if (valid_preset_name(preset) && current_config.switches[1].preset != preset) {
+				report("switch", std::string{"Switch 1 preset: "} + current_config.switches[1].preset + " -> " + preset);
+
 				current_config.switches[1].preset = preset;
+				save_config();
 			}
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
