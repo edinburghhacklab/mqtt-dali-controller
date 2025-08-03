@@ -640,7 +640,7 @@ static void configure_addresses(int switch_id, std::string addresses) {
 		ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
 		current_config.lights.fill(false);
 	} else {
-		ESP_LOGE("lights", "Configure light switch addresses: %s", addresses.c_str());
+		ESP_LOGE("lights", "Configure light switch %d addresses: %s", switch_id, addresses.c_str());
 		current_config.switches[switch_id].lights.fill(false);
 	}
 
