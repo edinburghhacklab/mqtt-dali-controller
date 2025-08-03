@@ -23,8 +23,6 @@
 #include "network.h"
 #include "util.h"
 
-static constexpr unsigned int LED_GPIO = 38;
-
 UI::UI(Network &network) : network_(network) {
 }
 
@@ -43,11 +41,15 @@ void UI::publish_uptime() {
 }
 
 void UI::setup() {
-	pinMode(LED_GPIO, OUTPUT);
-	digitalWrite(LED_GPIO, LOW);
+	led_.begin();
 }
 
 void UI::loop() {
+	if (!last_led_us_ || esp_timer_get_time() - last_led_us_ >= ONE_M) {
+		led_.show();
+		last_led_us_ = esp_timer_get_time();
+	}
+
 	if (startup_complete_ && network_.connected()) {
 		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M) {
 			publish_uptime();

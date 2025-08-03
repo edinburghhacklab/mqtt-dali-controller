@@ -17,7 +17,8 @@
 
 #pragma once
 
-#include <cstdint>
+#include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
 
 class Network;
 
@@ -30,9 +31,13 @@ public:
     void startup_complete(bool state);
 
 private:
+    static constexpr unsigned int LED_GPIO = 38;
+
     void publish_uptime();
 
     Network &network_;
+    Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};
+    uint64_t last_led_us_{0};
     uint64_t last_publish_us_{0};
     bool startup_complete_{false};
 };
