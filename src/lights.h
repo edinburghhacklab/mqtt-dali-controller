@@ -53,4 +53,6 @@ private:
 	std::array<std::string,MAX_ADDR+1> active_presets_{};
 	std::unordered_set<std::string> republish_groups_;
 	std::unordered_set<std::string> republish_presets_;
+	uint64_t last_publish_us_{0};
+	size_t publish_index_{0};
 };

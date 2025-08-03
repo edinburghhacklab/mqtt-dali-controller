@@ -124,12 +124,15 @@ void Lights::set_level(const std::string &lights, long level) {
 }
 
 void Lights::publish_active_presets() {
-	if (republish_groups_.empty() && republish_presets_.empty()) {
+	bool force = (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M);
+
+	if (!force && republish_groups_.empty() && republish_presets_.empty()) {
 		return;
 	}
 
 	const auto groups = config_.group_names();
 	const auto presets = config_.preset_names();
+	size_t i = 0;
 
 	for (const auto &group : groups) {
 		const auto lights = config_.get_group_addresses(group);
@@ -138,7 +141,7 @@ void Lights::publish_active_presets() {
 		for (const auto &preset : presets) {
 			bool republish_preset = republish_presets_.find(preset) != republish_presets_.end();
 
-			if (republish_group || republish_preset) {
+			if (republish_group || republish_preset || (force && publish_index_ == i)) {
 				bool is_active = false;
 
 				for (unsigned int i = 0; i <= MAX_ADDR; i++) {
@@ -153,8 +156,20 @@ void Lights::publish_active_presets() {
 					is_active ? "1" : "0", true);
 			}
 		}
+
+		i++;
 	}
 
 	republish_groups_.clear();
 	republish_presets_.clear();
+
+	if (force) {
+		/*
+		 * Republish only one of the groups every time because the total message
+		 * count can get very high (groups * presets).
+		 */
+		publish_index_++;
+		publish_index_ %= groups.size();
+		last_publish_us_ = esp_timer_get_time();
+	}
 }

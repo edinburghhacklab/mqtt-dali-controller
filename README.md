@@ -85,9 +85,10 @@ Presets will be republished with light level values for all addresses in order:
 dali/preset/<name>/levels <00-FF>... (retain)
 ```
 
-The active presets are reported as `dali/active/<group>/<name>` on startup and
-when they change. It's possible for multiple presets to be active as long as one
-or more lights were last set using that preset.
+The active presets are reported as `dali/active/<group>/<name>` on startup, when
+they change and every 60 seconds (cycling through one group at a time because
+there are a lot of topic name combinations). It's possible for multiple presets
+to be active as long as one or more lights were last set using that preset.
 
 Remove a preset:
 
