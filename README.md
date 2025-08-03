@@ -31,13 +31,35 @@ values:
 dali/addresses [<00-3F>...] (retain)
 ```
 
+### Groups
+
+Up to 10 groups of lights can be configured and they can overlap. The built-in
+group `all` includes all lights.
+
+Configure which lights are present in groups by listing them as uppercase hexadecimal
+values:
+```
+dali/group/<name> [<00-3F>...] (retain)
+```
+
+Delete a group by setting an empty value:
+```
+dali/group/<name> (null) (retain)
+```
+
+The reserved group names `all`, `delete` and `levels` can't be configured.
+
+The maximum length of a group name is 50 characters and they can only contain
+lowercase alphanumeric characters as well as `.`, `-` and `_`. Group names must
+not start with a number.
+
 ### Switches
 
-Configure which light switches are present by listing the lights as uppercase
-hexadecimal values and configuring the default preset:
+Configure which light switches are present by setting the group associated with
+the switch and configuring the default preset:
 ```
 dali/switch/<0-1>/name [name] (retain)
-dali/switch/<0-1>/addresses [<00-3F>...] (retain)
+dali/switch/<0-1>/group <name> (retain)
 dali/switch/<0-1>/preset <name> (retain)
 ```
 
@@ -46,11 +68,11 @@ and then every 60 seconds.
 
 ### Presets
 
-Up to 50 presets can be configured, setting an empty value to skip that light:
+Up to 10 presets can be configured, setting an empty value to skip that light:
 
 ```
-dali/preset/<name>/<0-63>[-<0-63>],... <0-254>
-dali/preset/<name>/<0-63>[-<0-63>],... (null)
+dali/preset/<name>/<<0-63>[-<0-63>]|group>,... <0-254>
+dali/preset/<name>/<<0-63>[-<0-63>]|group>,... (null)
 ```
 
 The reserved preset names `off`, `custom` and `unknown` can't be configured.
@@ -63,9 +85,9 @@ Presets will be republished with light level values for all addresses in order:
 dali/preset/<name>/levels <00-FF>... (retain)
 ```
 
-The active presets are reported as `dali/preset/<name>/active` when they change
-and then every 60 seconds. It's possible for multiple presets to be active as
-long as one or more lights were last set using that preset.
+The active presets are reported as `dali/active/<group>/<name>` on startup and
+when they change. It's possible for multiple presets to be active as long as one
+or more lights were last set using that preset.
 
 Remove a preset:
 
@@ -75,16 +97,23 @@ dali/preset/<name>/delete (null)
 
 ### Usage
 
-Set individual lights:
+Set individual lights or groups:
 
 ```
-dali/set/<0-63>[-<0-63>],... <0-254>
+dali/set/<<0-63>[-<0-63>]|group>,... <0-254>
 ```
 
-Select preset:
+Select preset for all lights:
 
 ```
 dali/preset/<name> (null)
+dali/preset/<name> all
+```
+
+Select preset for individual lights or groups:
+
+```
+dali/preset/<name> <<0-63>[-<0-63>]|group>
 ```
 
 ### Miscellaneous

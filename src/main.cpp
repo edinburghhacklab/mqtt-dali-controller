@@ -54,6 +54,7 @@ void setup() {
 	ui.setup();
 
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
+		static const std::string group_prefix = "/group/";
 		static const std::string preset_prefix = "/preset/";
 		static const std::string set_prefix = "/set/";
 		std::string topic_str = topic;
@@ -81,13 +82,11 @@ void setup() {
 			lights.address_config_changed();
 		} else if (topic_str == "/addresses") {
 			config.set_addresses(std::string{(const char*)payload, length});
-			lights.address_config_changed();
-		} else if (topic_str == "/switch/0/addresses") {
-			config.set_switch_addresses(0, std::string{(const char*)payload, length});
-			lights.address_config_changed();
-		} else if (topic_str == "/switch/1/addresses") {
-			config.set_switch_addresses(1, std::string{(const char*)payload, length});
-			lights.address_config_changed();
+			lights.address_config_changed(BUILTIN_GROUP_ALL);
+		} else if (topic_str == "/switch/0/group") {
+			config.set_switch_group(0, std::string{(const char*)payload, length});
+		} else if (topic_str == "/switch/1/group") {
+			config.set_switch_group(1, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/0/name") {
 			config.set_switch_name(0, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/1/name") {
@@ -96,12 +95,23 @@ void setup() {
 			config.set_switch_preset(0, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/1/preset") {
 			config.set_switch_preset(1, std::string{(const char*)payload, length});
+		} else if (topic_str.rfind(group_prefix, 0) == 0) {
+			std::string group_name = topic_str.substr(group_prefix.length());
+
+			config.set_group_addresses(group_name, std::string{(const char *)payload, length});
+			lights.address_config_changed(group_name);
 		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
 			std::string preset_name = topic_str.substr(preset_prefix.length());
 			auto idx = preset_name.find("/");
 
 			if (idx == std::string::npos) {
-				lights.select_preset(preset_name);
+				std::string payload_copy = std::string{(const char *)payload, length};
+
+				if (payload_copy.empty()) {
+					payload_copy = BUILTIN_GROUP_ALL;
+				}
+
+				lights.select_preset(preset_name, payload_copy);
 			} else {
 				std::string light_id = preset_name.substr(idx + 1);
 
@@ -158,8 +168,9 @@ void loop() {
 		network.subscribe(topic + "/reload");
 		network.subscribe(topic + "/startup_complete");
 		network.subscribe(topic + "/addresses");
-		network.subscribe(topic + "/switch/0/addresses");
-		network.subscribe(topic + "/switch/1/addresses");
+		network.subscribe(topic + "/group/+");
+		network.subscribe(topic + "/switch/0/group");
+		network.subscribe(topic + "/switch/1/group");
 		network.subscribe(topic + "/switch/0/name");
 		network.subscribe(topic + "/switch/1/name");
 		network.subscribe(topic + "/switch/0/preset");

@@ -23,6 +23,7 @@
 #include <array>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "config.h"
 #include "dali.h"
@@ -32,6 +33,9 @@
 Lights::Lights(Network &network, Config &config)
         : network_(network), config_(config) {
     active_presets_.fill(RESERVED_PRESET_UNKNOWN);
+	republish_presets_.insert(BUILTIN_PRESET_OFF);
+	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
+	republish_presets_.insert(RESERVED_PRESET_UNKNOWN);
 }
 
 void Lights::loop() {
@@ -45,32 +49,36 @@ void Lights::startup_complete(bool state) {
 }
 
 void Lights::address_config_changed() {
-    republish_active_presets_ = true;
+	republish_groups_ = config_.group_names();
+}
+
+void Lights::address_config_changed(const std::string &group) {
+	republish_groups_.insert(group);
 }
 
 std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
     return levels_;
 }
 
-void Lights::select_preset(const std::string &name, std::bitset<MAX_ADDR+1> *filter) {
-	const auto lights = config_.get_addresses();
+void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {
+	const auto addresses = config_.get_addresses();
+	const auto light_ids = config_.parse_light_ids(lights);
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
+	bool changed = false;
 
 	if (!config_.get_preset(name, preset_levels)) {
 		return;
 	}
 
-	if (!filter) {
-		network_.report("lights", std::string{"Preset = "} + name);
-	}
-
 	for (int i = 0; i < MAX_ADDR; i++) {
-		if (lights[i]) {
+		if (addresses[i]) {
 			if (preset_levels[i] != -1) {
-				if (filter == nullptr || filter->test(i)) {
+				if (light_ids.find(i) != light_ids.end()) {
 					levels_[i] = preset_levels[i];
+					republish_presets_.insert(active_presets_[i]);
 					active_presets_[i] = name;
-					republish_active_presets_ = true;
+					republish_presets_.insert(active_presets_[i]);
+					changed = true;
 				}
 			}
 		} else {
@@ -80,6 +88,10 @@ void Lights::select_preset(const std::string &name, std::bitset<MAX_ADDR+1> *fil
 			}
 		}
 	}
+
+	if (changed && !internal) {
+		network_.report("lights", config_.lights_text(light_ids) + " = " + name);
+	}
 }
 
 void Lights::set_level(const std::string &lights, long level) {
@@ -88,8 +100,8 @@ void Lights::set_level(const std::string &lights, long level) {
 	}
 
 	const auto addresses = config_.get_addresses();
-	const auto light_ids = Config::parse_light_ids(lights);
-	unsigned int changed = 0;
+	const auto light_ids = config_.parse_light_ids(lights);
+	bool changed = false;
 
 	for (int light_id : light_ids) {
 		if (!addresses[light_id]) {
@@ -97,9 +109,10 @@ void Lights::set_level(const std::string &lights, long level) {
 		}
 
 		levels_[light_id] = level;
+		republish_presets_.insert(active_presets_[light_id]);
 		active_presets_[light_id] = RESERVED_PRESET_CUSTOM;
-		republish_active_presets_ = true;
-		changed++;
+		republish_presets_.insert(active_presets_[light_id]);
+		changed = true;
 	}
 
 	if (!changed) {
@@ -110,39 +123,37 @@ void Lights::set_level(const std::string &lights, long level) {
 }
 
 void Lights::publish_active_presets() {
-	bool force = !last_published_active_presets_us_
-			|| esp_timer_get_time() - last_published_active_presets_us_ >= ONE_M;
-
-	if (!force && !republish_active_presets_) {
+	if (republish_groups_.empty() && republish_presets_.empty()) {
 		return;
 	}
 
-	const auto lights = config_.get_addresses();
-	const std::unordered_set<std::string> all = config_.preset_names();
-	std::unordered_set<std::string> active;
+	const auto groups = config_.group_names();
+	const auto presets = config_.preset_names();
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (lights[i]) {
-			active.insert(active_presets_[i]);
+	for (const auto &group : groups) {
+		const auto lights = config_.get_group_addresses(group);
+		bool republish = republish_groups_.find(group) != republish_groups_.end();
+
+		for (const auto &preset : presets) {
+			republish |= republish_presets_.find(preset) != republish_presets_.end();
+
+			if (republish) {
+				bool is_active = false;
+
+				for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+					if (lights[i] && active_presets_[i] == preset) {
+						is_active = true;
+						break;
+					}
+				}
+
+				network_.publish(std::string{MQTT_TOPIC} + "/active/"
+					+ group + "/" + preset,
+					is_active ? "1" : "0", true);
+			}
 		}
 	}
 
-	for (const auto &preset : all) {
-		bool is_active = active.find(preset) != active.end();
-		bool last_active = last_active_presets_.find(preset) != last_active_presets_.end();
-
-		if (force || (is_active != last_active)) {
-			network_.publish(std::string{MQTT_TOPIC} + "/preset/" + preset + "/active", is_active ? "1" : "0", true);
-		}
-
-		if (is_active) {
-			last_active_presets_.insert(preset);
-		} else {
-			last_active_presets_.erase(preset);
-		}
-	}
-
-	if (force) {
-		last_published_active_presets_us_ = esp_timer_get_time();
-	}
+	republish_groups_.clear();
+	republish_presets_.clear();
 }

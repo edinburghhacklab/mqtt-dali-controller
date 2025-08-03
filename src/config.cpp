@@ -43,12 +43,21 @@
 
 static constexpr auto &FS = LittleFS;
 
-static const std::string BUILTIN_PRESET_OFF = "off";
+static const std::string RESERVED_GROUP_LEVELS = "levels";
+static const std::string RESERVED_GROUP_DELETE = "delete";
 static constexpr size_t MAX_TEXT_LEN = 256;
 static const std::string FILENAME = "/config.cbor";
 static const std::string BACKUP_FILENAME = "/config.cbor~";
 
 namespace cbor = qindesign::cbor;
+
+static std::string quoted_string(const std::string &text) {
+	if (text.empty()) {
+		return "`(null)`";
+	} else {
+		return std::string{"`"} + text + "`";
+	}
+}
 
 static bool readText(cbor::Reader &reader, std::string &text, size_t max_length) {
 	uint64_t length;
@@ -84,6 +93,34 @@ void Config::setup() {
 	load_config();
 }
 
+bool Config::valid_group_name(const std::string &name) {
+	if (name == BUILTIN_GROUP_ALL
+			|| name == RESERVED_GROUP_LEVELS
+			|| name == RESERVED_GROUP_DELETE
+			|| name.empty()
+			|| name.length() > MAX_GROUP_NAME_LEN) {
+		return false;
+	}
+
+	for (size_t i = 0; i < name.length(); i++) {
+		if (name[i] >= '0' && name[i] <= '9') {
+			if (i == 0) {
+				return false;
+			}
+
+			continue;
+		} else if (name[i] >= 'a' && name[i] <= 'z') {
+			continue;
+		} else if (name[i] == '.' || name[i] == '-' || name[i] == '_') {
+			continue;
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
 bool Config::valid_preset_name(const std::string &name) {
 	if (name == BUILTIN_PRESET_OFF
 			|| name == RESERVED_PRESET_CUSTOM
@@ -109,15 +146,11 @@ bool Config::valid_preset_name(const std::string &name) {
 }
 
 std::string Config::addresses_text() {
-	return addresses_text(-1);
+	return addresses_text(get_addresses());
 }
 
-std::string Config::switch_addresses_text(unsigned int switch_id) {
-	if (switch_id < NUM_SWITCHES) {
-		return addresses_text(get_switch_addresses(switch_id));
-	} else {
-		return "(null)";
-	}
+std::string Config::group_addresses_text(const std::string &group) {
+	return addresses_text(get_group_addresses(group));
 }
 
 std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
@@ -220,7 +253,13 @@ bool Config::read_config(cbor::Reader &reader) {
 		}
 
 		if (key == "lights") {
-			if (!read_config_lights(reader)) {
+			if (!read_config_lights(reader, current_.lights)) {
+				return false;
+			}
+
+			ESP_LOGE("config", "Lights = %s", addresses_text(current_.lights).c_str());
+		} else if (key == "groups") {
+			if (!read_config_groups(reader)) {
 				return false;
 			}
 		} else if (key == "switches") {
@@ -243,7 +282,7 @@ bool Config::read_config(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_lights(cbor::Reader &reader) {
+bool Config::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -260,12 +299,76 @@ bool Config::read_config_lights(cbor::Reader &reader) {
 		}
 
 		if (i <= MAX_ADDR) {
-			current_.lights[i] = value;
+			lights[i] = value;
 			i++;
 		}
 	}
 
-	ESP_LOGE("config", "Lights = %s", addresses_text(current_.lights).c_str());
+	return true;
+}
+
+bool Config::read_config_groups(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (!read_config_group(reader)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool Config::read_config_group(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	std::string name;
+	std::bitset<MAX_ADDR+1> lights;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "name") {
+			if (!readText(reader, name, UINT8_MAX)) {
+				return false;
+			}
+		} else if (key == "lights") {
+			if (!read_config_lights(reader, lights)) {
+				return false;
+			}
+		} else {
+			ESP_LOGE("config", "Unknown group key: %s", key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	if (valid_group_name(name)) {
+		auto result = current_.groups.emplace(name, std::move(lights));
+
+		if (result.second) {
+			ESP_LOGE("config", "Group %s = %s", name.c_str(), group_addresses_text(name).c_str());
+		} else {
+			ESP_LOGE("config", "Ignoring duplicate group: %s", name.c_str());
+		}
+	} else {
+		ESP_LOGE("config", "Ignoring invalid group: %s", name.c_str());
+	}
 
 	return true;
 }
@@ -320,9 +423,18 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 
 			ESP_LOGE("config", "Switch %u name = %s", switch_id, name.c_str());
 			current_.switches[switch_id].name = name;
-		} else if (key == "lights") {
-			if (!read_config_switch_lights(reader, switch_id)) {
+		} else if (key == "group") {
+			std::string group;
+
+			if (!readText(reader, group, UINT8_MAX)) {
 				return false;
+			}
+
+			if (valid_group_name(group)) {
+				ESP_LOGE("config", "Switch %u group = %s", switch_id, group.c_str());
+				current_.switches[switch_id].group = group;
+			} else {
+				ESP_LOGE("config", "Switch %u invalid group ignored: %s", switch_id, group.c_str());
 			}
 		} else if (key == "preset") {
 			std::string preset;
@@ -345,34 +457,6 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 			}
 		}
 	}
-
-	return true;
-}
-
-bool Config::read_config_switch_lights(cbor::Reader &reader, unsigned int switch_id) {
-	uint64_t length;
-	bool indefinite;
-	unsigned int i = 0;
-
-	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
-		return false;
-	}
-
-	while (length-- > 0) {
-		bool value;
-
-		if (!cbor::expectBoolean(reader, &value)) {
-			return false;
-		}
-
-		if (i <= MAX_ADDR) {
-			current_.switches[switch_id].lights[i] = value;
-			i++;
-		}
-	}
-
-	ESP_LOGE("config", "Switch %u lights = %s", switch_id,
-		addresses_text(current_.switches[switch_id].lights).c_str());
 
 	return true;
 }
@@ -526,12 +610,27 @@ bool Config::write_config(const std::string &filename) {
 void Config::write_config(cbor::Writer &writer) {
 	std::string key;
 
-	writer.beginMap(3);
+	writer.beginMap(4);
 
 	writeText(writer, "lights");
 	writer.beginArray(MAX_ADDR+1);
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		writer.writeBoolean(current_.lights[i]);
+	}
+
+	writeText(writer, "groups");
+	writer.beginArray(current_.groups.size());
+	for (const auto &group : current_.groups) {
+		writer.beginMap(2);
+
+		writeText(writer, "name");
+		writeText(writer, group.first);
+
+		writeText(writer, "lights");
+		writer.beginArray(MAX_ADDR+1);
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			writer.writeBoolean(group.second[i]);
+		}
 	}
 
 	writeText(writer, "switches");
@@ -542,11 +641,8 @@ void Config::write_config(cbor::Writer &writer) {
 		writeText(writer, "name");
 		writeText(writer, current_.switches[i].name);
 
-		writeText(writer, "lights");
-		writer.beginArray(MAX_ADDR+1);
-		for (unsigned int j = 0; j <= MAX_ADDR; j++) {
-			writer.writeBoolean(current_.switches[i].lights[j]);
-		}
+		writeText(writer, "group");
+		writeText(writer, current_.switches[i].group);
 
 		writeText(writer, "preset");
 		writeText(writer, current_.switches[i].preset);
@@ -572,11 +668,16 @@ void Config::publish_config() {
 	network_.publish(std::string{MQTT_TOPIC} + "/addresses",
 		addresses_text(current_.lights), true);
 
+	for (const auto &group : current_.groups) {
+		network_.publish(std::string{MQTT_TOPIC} + "/group/" + group.first,
+			addresses_text(group.second), true);
+	}
+
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		auto switch_prefix = std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i);
 
 		network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
-		network_.publish(switch_prefix + "/addresses", addresses_text(current_.switches[i].lights), true);
+		network_.publish(switch_prefix + "/group", current_.switches[i].group, true);
 		network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
 	}
 
@@ -591,37 +692,51 @@ void Config::publish_preset(const std::string &name, const std::array<int16_t,MA
 }
 
 std::bitset<MAX_ADDR+1> Config::get_addresses() {
-	return current_.lights;
+	return get_group_addresses(BUILTIN_GROUP_ALL);
 }
 
-std::bitset<MAX_ADDR+1> Config::get_switch_addresses(unsigned int switch_id) {
-	if (switch_id < NUM_SWITCHES) {
-		return current_.switches[switch_id].lights;
+std::unordered_set<std::string> Config::group_names() {
+	std::unordered_set<std::string> all(MAX_GROUPS + 1);
+
+	all.insert(BUILTIN_GROUP_ALL);
+
+	for (const auto &groups : current_.groups) {
+		all.insert(groups.first);
+	}
+
+	return all;
+}
+
+std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) {
+	if (group == BUILTIN_GROUP_ALL) {
+		return current_.lights;
 	} else {
-		return {};
+		auto it = current_.groups.find(group);
+
+		if (it == current_.groups.end()) {
+			return {};
+		}
+
+		return it->second;
 	}
 }
 
 void Config::set_addresses(std::string addresses) {
-	set_addresses(-1, addresses);
+	set_addresses(BUILTIN_GROUP_ALL, addresses);
 }
 
-void Config::set_switch_addresses(unsigned int switch_id, std::string addresses) {
-	if (switch_id < NUM_SWITCHES) {
-		set_addresses(switch_id, addresses);
-	}
-}
-
-void Config::set_addresses(int switch_id, std::string addresses) {
-	auto before = addresses_text(switch_id);
-
-	if (switch_id == -1) {
-		current_.lights.reset();
-	} else if (switch_id < NUM_SWITCHES) {
-		current_.switches[switch_id].lights.reset();
-	} else {
+void Config::set_group_addresses(const std::string &name, std::string addresses) {
+	if (!valid_group_name(name)) {
 		return;
 	}
+
+	set_addresses(name, addresses);
+}
+
+void Config::set_addresses(const std::string &group, std::string addresses) {
+	std::bitset<MAX_ADDR+1> lights;
+
+	auto before = group_addresses_text(group);
 
 	while (addresses.length() >= 2) {
 		unsigned int address = 0;
@@ -639,28 +754,61 @@ void Config::set_addresses(int switch_id, std::string addresses) {
 		}
 
 		if (address <= MAX_ADDR) {
-			if (switch_id == -1) {
-				current_.lights[address] = true;
-			} else {
-				current_.switches[switch_id].lights[address] = true;
-			}
+			lights[address] = true;
 		}
 
 		addresses = addresses.substr(2);
 	}
 
-	auto after = addresses_text(switch_id);
+	if (group == BUILTIN_GROUP_ALL) {
+		current_.lights = lights;
+	} else {
+		auto it = current_.groups.find(group);
+
+		if (it == current_.groups.end()) {
+			if (current_.groups.size() == MAX_GROUPS) {
+				return;
+			}
+
+			current_.groups.emplace(group, std::move(lights));
+		} else {
+			it->second = lights;
+		}
+	}
+
+	auto after = group_addresses_text(group);
 
 	save_config();
 
 	if (before != after) {
-		if (switch_id == -1) {
+		if (group == BUILTIN_GROUP_ALL) {
 			ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
-			network_.report("lights", std::string{"Addresses: "} + before + " -> " + after);
+			network_.publish(std::string{MQTT_TOPIC} + "/addresses", after, true);
+			network_.report("lights", std::string{"Addresses: "}
+				+ quoted_string(before) + " -> " + quoted_string(after));
 		} else {
-			ESP_LOGE("lights", "Configure light switch %d addresses: %s", switch_id, addresses.c_str());
-			network_.report("lights", std::string{"Switch "} + std::to_string(switch_id) + " addresses: " + before + " -> " + after);
+			ESP_LOGE("lights", "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
+			network_.publish(std::string{MQTT_TOPIC} + "/group/" + group, after, true);
+			network_.report("lights", std::string{"Group "} + group + " addresses: "
+				+ quoted_string(before) + " -> " + quoted_string(after));
 		}
+	}
+}
+
+void Config::delete_group(const std::string &name) {
+	const auto it = current_.groups.find(name);
+
+	if (it == current_.groups.cend()) {
+		return;
+	}
+
+	network_.report("groups", std::string{"Group "} + name + ": "
+		+ quoted_string(group_addresses_text(name)) + " (deleted)");
+
+	current_.groups.erase(it);
+	network_.publish(std::string{MQTT_TOPIC} + "/group/" + name, "", true);
+	for (const auto &preset : current_.presets) {
+		network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/" + preset.first + "/active", "", true);
 	}
 }
 
@@ -679,9 +827,36 @@ void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
 		if (current_.switches[switch_id].name != new_name) {
 			network_.report("switch", std::string{"Switch "}
 				+ std::to_string(switch_id) + " name: "
-				+ current_.switches[switch_id].name + " -> " + new_name);
+				+ quoted_string(current_.switches[switch_id].name)
+				+ " -> " + quoted_string(new_name));
 
 			current_.switches[switch_id].name = new_name;
+			save_config();
+		}
+	}
+}
+
+std::string Config::get_switch_group(unsigned int switch_id) {
+	if (switch_id < NUM_SWITCHES) {
+		return current_.switches[switch_id].group;
+	} else {
+		return "";
+	}
+}
+
+void Config::set_switch_group(unsigned int switch_id, const std::string &group) {
+	if (switch_id < NUM_SWITCHES) {
+		if (!valid_group_name(group)) {
+			return;
+		}
+
+		if (current_.switches[switch_id].group != group) {
+			network_.report("switch", std::string{"Switch "}
+				+ std::to_string(switch_id) + " group: "
+				+ quoted_string(current_.switches[switch_id].group)
+				+ " -> " + quoted_string(group));
+
+			current_.switches[switch_id].group = group;
 			save_config();
 		}
 	}
@@ -697,14 +872,17 @@ std::string Config::get_switch_preset(unsigned int switch_id) {
 
 void Config::set_switch_preset(unsigned int switch_id, const std::string &preset) {
 	if (switch_id < NUM_SWITCHES) {
-		auto new_preset = preset.substr(0, MAX_SWITCH_NAME_LEN);
+		if (!valid_preset_name(preset)) {
+			return;
+		}
 
-		if (current_.switches[switch_id].preset != new_preset) {
+		if (current_.switches[switch_id].preset != preset) {
 			network_.report("switch", std::string{"Switch "}
 				+ std::to_string(switch_id) + " preset: "
-				+ current_.switches[switch_id].preset + " -> " + new_preset);
+				+ quoted_string(current_.switches[switch_id].preset)
+				+ " -> " + quoted_string(preset));
 
-			current_.switches[switch_id].preset = new_preset;
+			current_.switches[switch_id].preset = preset;
 			save_config();
 		}
 	}
@@ -785,10 +963,12 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		publish_preset(it->first, it->second);
 	}
 
-	network_.report("presets", std::string{"Preset "} + name + ": " + lights_text(light_ids) + " = " + std::to_string(level));
+	network_.report("presets", std::string{"Preset "} + name + ": "
+		+ quoted_string(lights_text(light_ids)) + " = " + std::to_string(level));
 
 	if (before != after) {
-		network_.report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
+		network_.report("presets", std::string{"Preset "} + name + ": "
+			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 }
 
@@ -841,7 +1021,8 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 	if (before != after) {
 		publish_preset(it->first, it->second);
-		network_.report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
+		network_.report("presets", std::string{"Preset "} + name + ": "
+			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 }
 
@@ -852,13 +1033,14 @@ void Config::delete_preset(const std::string &name) {
 		return;
 	}
 
-	network_.report("presets", std::string{"Preset "} + name + ": " + preset_levels_text(it->second, true) + " (deleted)");
+	network_.report("presets", std::string{"Preset "} + name + ": "
+		+ quoted_string(preset_levels_text(it->second, true))
+		+ " (deleted)");
 
 	current_.presets.erase(it);
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/active", "", true);
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
 }
-
 
 std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) {
 	std::istringstream input{light_id};
@@ -866,12 +1048,21 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) {
 	std::set<unsigned int> light_ids;
 
 	while (std::getline(input, item, ',')) {
+		auto group = current_.groups.find(item);
 		auto dash_idx = item.find('-');
 		unsigned long begin, end;
 
-		if (item == "all") {
+		if (item == BUILTIN_GROUP_ALL) {
 			begin = 0;
 			end = MAX_ADDR;
+		} else if (group != current_.groups.end()) {
+			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+				if (group->second[i]) {
+					light_ids.insert(i);
+				}
+			}
+
+			continue;
 		} else if (dash_idx == std::string::npos) {
 			char *endptr = nullptr;
 
@@ -952,6 +1143,10 @@ std::string Config::lights_text(const std::set<unsigned int> &light_ids) {
 	if (total == found) {
 		prefix = "All";
 		list = "";
+	}
+
+	if (found == 0) {
+		return "None";
 	}
 
 	return prefix + list;

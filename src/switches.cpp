@@ -42,34 +42,34 @@ void Switches::setup() {
 
 void Switches::loop() {
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		auto group = config_.get_switch_group(i);
 		auto preset = config_.get_switch_preset(i);
-		int switch_value = preset.empty() ? LOW : digitalRead(SWITCH_GPIO[i]);
+		int switch_value = (preset.empty() || group.empty())
+			? LOW : digitalRead(SWITCH_GPIO[i]);
 
 		if (switch_value != state_[i].value) {
 			state_[i].value = switch_value;
 
+			std::string name = config_.get_switch_name(i);
+
+			if (name.empty()) {
+				name = "Light switch ";
+				name += std::to_string(i);
+			}
+
 			if (network_.connected()) {
-				std::string name = config_.get_switch_name(i);
-
-				if (name.empty()) {
-					name = "Light switch ";
-					name += std::to_string(i);
-				}
-
 				network_.publish(std::string{MQTT_TOPIC}
 					+ "/switch/" + std::to_string(i) + "/state",
 					state_[i].value == LOW ? "1" : "0",
 					true);
-				state_[i].report_us = esp_timer_get_time();
-
-				network_.report("switch", name + " "
-					+ (state_[i].value == LOW ? "ON" : "OFF")
-					+ " (levels reset to " + preset + ")");
 			}
+			state_[i].report_us = esp_timer_get_time();
 
-			auto addresses = config_.get_switch_addresses(i);
+			network_.report("switch", name + " "
+				+ (state_[i].value == LOW ? "ON" : "OFF")
+				+ " (levels reset to " + preset + ")");
 
-			lights_.select_preset(preset, &addresses);
+			lights_.select_preset(preset, group, true);
 		} else if (state_[i].report_us
 				&& esp_timer_get_time() - state_[i].report_us >= ONE_M) {
 			network_.publish(std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i) + "/state",
