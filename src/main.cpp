@@ -106,6 +106,7 @@ static bool config_saved = false;
 
 static std::array<uint8_t,MAX_ADDR+1> levels;
 static std::array<uint8_t,MAX_ADDR+1> tx_levels;
+static std::array<std::string,MAX_ADDR+1> active_presets;
 
 namespace cbor = qindesign::cbor;
 
@@ -360,6 +361,7 @@ static void select_preset(const std::string &name,
 		for (int i = 0; i < MAX_ADDR; i++) {
 			if (filter == nullptr || filter->at(i)) {
 				levels[i] = 0;
+				active_presets[i] = BUILTIN_PRESET_OFF;
 			}
 		}
 	} else {
@@ -367,6 +369,7 @@ static void select_preset(const std::string &name,
 			if (it->second[i] != -1) {
 				if (filter == nullptr || filter->at(i)) {
 					levels[i] = it->second[i];
+					active_presets[i] = name;
 				}
 			}
 		}
@@ -401,6 +404,7 @@ static void set_level(int light_id, int level) {
 			+ std::to_string(level));
 
 	levels[light_id] = level;
+	active_presets[light_id] = BUILTIN_PRESET_CUSTOM;
 }
 
 static void transmit_dali_one(unsigned int address, unsigned int level) {
