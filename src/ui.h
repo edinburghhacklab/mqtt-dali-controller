@@ -29,10 +29,12 @@ public:
 	void setup();
 	void loop();
 	void startup_complete(bool state);
+	void status_report();
 
 private:
 	static constexpr unsigned int LED_GPIO = 38;
 
+	void publish_partitions();
 	void publish_uptime();
 
 	Network &network_;

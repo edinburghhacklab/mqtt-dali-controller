@@ -47,6 +47,19 @@ static void set_startup_complete(bool state) {
 	ui.startup_complete(state);
 }
 
+extern "C" {
+
+bool verifyRollbackLater() {
+	return true;
+}
+
+bool testSPIRAM() {
+	return true;
+}
+
+}
+
+
 void setup() {
 	dali.setup();
 	switches.setup();
@@ -80,6 +93,8 @@ void setup() {
 			config.load_config();
 			config.publish_config();
 			lights.address_config_changed();
+		} else if (topic_str == "/status") {
+			ui.status_report();
 		} else if (topic_str == "/addresses") {
 			config.set_addresses(std::string{(const char*)payload, length});
 			lights.address_config_changed(BUILTIN_GROUP_ALL);
@@ -170,6 +185,7 @@ void loop() {
 		network.subscribe("meta/mqtt-agents/poll");
 		network.subscribe(topic + "/reboot");
 		network.subscribe(topic + "/reload");
+		network.subscribe(topic + "/status");
 		network.subscribe(topic + "/startup_complete");
 		network.subscribe(topic + "/addresses");
 		network.subscribe(topic + "/group/+");
