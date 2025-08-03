@@ -325,17 +325,19 @@ static void configure_addresses(int switch_id, std::string addresses) {
 	republish_active_presets = true;
 }
 
-static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
-	std::vector<char> payload(2 * (MAX_ADDR + 1) + 1);
+static std::string preset_levels_text(const std::array<int,MAX_ADDR+1> &levels) {
+	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		snprintf(&payload[2 * i], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+		snprintf(&buffer[2 * i], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
 	}
 
-	payload[payload.size() - 1] = 0;
+	return {buffer.data(), buffer.size() - 1};
+}
 
+static void publish_preset(const std::string &name, const std::array<int,MAX_ADDR+1> &levels) {
 	mqtt.publish((std::string{MQTT_TOPIC} + "/preset/" + name + "/levels").c_str(),
-		payload.data(), true);
+		preset_levels_text(levels).c_str(), true);
 }
 
 static bool valid_preset_name(const std::string &name) {
@@ -425,6 +427,40 @@ static std::set<unsigned int> parse_light_ids(const std::string &light_id) {
 	return light_ids;
 }
 
+static std::string list_lights(const std::set<unsigned int> &light_ids) {
+	std::string prefix = "Light ";
+	std::string list = "";
+	unsigned int total = 0;
+	unsigned int found = 0;
+
+	for (unsigned int i = 0; i < MAX_ADDR; i++) {
+		if (current_config.lights[i]) {
+			total++;
+		}
+	}
+
+	for (int light_id : light_ids) {
+		if (!current_config.lights[light_id]) {
+			continue;
+		}
+
+		if (!list.empty()) {
+			prefix = "Lights ";
+			list += ",";
+		}
+
+		list += std::to_string(light_id);
+		found++;
+	}
+
+	if (total == found) {
+		prefix = "All";
+		list = "";
+	}
+
+	return prefix + list;
+}
+
 static void configure_preset(const std::string &name, const std::string &lights, long level) {
 	if (level < -1 || level > MAX_LEVEL) {
 		return;
@@ -435,7 +471,7 @@ static void configure_preset(const std::string &name, const std::string &lights,
 	}
 
 	auto light_ids = parse_light_ids(lights);
-	const auto it = current_config.presets.find(name);
+	auto it = current_config.presets.find(name);
 
 	if (it == current_config.presets.cend()) {
 		if (current_config.presets.size() == MAX_PRESETS) {
@@ -445,20 +481,29 @@ static void configure_preset(const std::string &name, const std::string &lights,
 		std::array<int, MAX_ADDR+1> levels;
 
 		levels.fill(-1);
-		for (unsigned int light_id : light_ids) {
-			levels[light_id] = level;
-		}
-		current_config.presets.emplace(name, levels);
-		save_config();
-		publish_preset(name, levels);
-		return;
+		it = current_config.presets.emplace(name, std::move(levels)).first;
 	}
 
+	auto before = preset_levels_text(it->second);
+
 	for (unsigned int light_id : light_ids) {
-		it->second[light_id] = level;
+		if (current_config.lights[light_id]) {
+			it->second[light_id] = level;
+		}
 	}
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (!current_config.lights[i]) {
+			it->second[i] = -1;
+		}
+	}
+
+	auto after = preset_levels_text(it->second);
+
 	save_config();
 	publish_preset(it->first, it->second);
+	report("presets", std::string{"Preset "} + name + ": " + list_lights(light_ids) + " = " + std::to_string(level));
+	report("presets", std::string{"Preset "} + name + ": " + before + " -> " + after);
 }
 
 static void select_preset(const std::string &name,
@@ -510,28 +555,12 @@ static void set_level(const std::string &lights, long level) {
 	}
 
 	auto light_ids = parse_light_ids(lights);
-	std::string prefix = "Light ";
-	std::string list = "";
-	unsigned int total = 0;
 	unsigned int changed = 0;
-
-	for (unsigned int i = 0; i < MAX_ADDR; i++) {
-		if (current_config.lights[i]) {
-			total++;
-		}
-	}
 
 	for (int light_id : light_ids) {
 		if (!current_config.lights[light_id]) {
 			continue;
 		}
-
-		if (!list.empty()) {
-			prefix = "Lights ";
-			list += ",";
-		}
-
-		list += "#" + std::to_string(light_id);
 
 		levels[light_id] = level;
 		active_presets[light_id] = RESERVED_PRESET_CUSTOM;
@@ -543,12 +572,7 @@ static void set_level(const std::string &lights, long level) {
 		return;
 	}
 
-	if (total == changed) {
-		prefix = "All";
-		list = "";
-	}
-
-	report("lights", prefix + list + " = " + std::to_string(level));
+	report("lights", list_lights(light_ids) + " = " + std::to_string(level));
 }
 
 static void publish_active_presets() {
@@ -645,6 +669,7 @@ void setup() {
 	WiFi.mode(WIFI_STA);
 
 	mqtt.setServer(MQTT_HOSTNAME, MQTT_PORT);
+	mqtt.setBufferSize(512);
 	mqtt.setCallback([] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string preset_prefix = "/preset/";
 		static const std::string set_prefix = "/set/";
