@@ -43,6 +43,7 @@ private:
 	UI& operator= (const UI&) = delete;
 
 	void publish_application();
+	void publish_boot();
 	void publish_partitions();
 	void publish_stats();
 

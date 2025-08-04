@@ -70,6 +70,7 @@ static const char *ota_state_string(esp_ota_img_states_t state) {
 
 void UI::status_report() {
 	publish_application();
+	publish_boot();
 	publish_partitions();
 	publish_stats();
 }
@@ -82,6 +83,14 @@ void UI::publish_application() {
 	network_.publish(topic + "/version", null_terminated_string(desc->version));
 	network_.publish(topic + "/idf_ver", null_terminated_string(desc->idf_ver));
 	network_.publish(topic + "/timestamp", null_terminated_string(desc->date) + " " + null_terminated_string(desc->time));
+}
+
+void UI::publish_boot() {
+	std::string topic = std::string{MQTT_TOPIC} + "/boot";
+
+	network_.publish(topic + "/reset_reason/0", std::to_string(rtc_get_reset_reason(0)));
+	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)));
+	network_.publish(topic + "/wakeup_cause", std::to_string(rtc_get_wakeup_cause()));
 }
 
 void UI::publish_partitions() {
@@ -130,24 +139,26 @@ void UI::publish_partitions() {
 }
 
 void UI::publish_stats() {
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/size", std::to_string(ESP.getHeapSize()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/free", std::to_string(ESP.getFreeHeap()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/min_free_size", std::to_string(ESP.getMinFreeHeap()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/max_block_size", std::to_string(ESP.getMaxAllocHeap()));
+	std::string topic = std::string{MQTT_TOPIC} + "/stats";
 
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/size", std::to_string(ESP.getPsramSize()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/free", std::to_string(ESP.getFreePsram()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/min_free_size", std::to_string(ESP.getMinFreePsram()));
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/max_block_size", std::to_string(ESP.getMaxAllocPsram()));
+	network_.publish(topic + "/heap/size", std::to_string(ESP.getHeapSize()));
+	network_.publish(topic + "/heap/free", std::to_string(ESP.getFreeHeap()));
+	network_.publish(topic + "/heap/min_free_size", std::to_string(ESP.getMinFreeHeap()));
+	network_.publish(topic + "/heap/max_block_size", std::to_string(ESP.getMaxAllocHeap()));
+
+	network_.publish(topic + "/psram/size", std::to_string(ESP.getPsramSize()));
+	network_.publish(topic + "/psram/free", std::to_string(ESP.getFreePsram()));
+	network_.publish(topic + "/psram/min_free_size", std::to_string(ESP.getMinFreePsram()));
+	network_.publish(topic + "/psram/max_block_size", std::to_string(ESP.getMaxAllocPsram()));
 
 	{
 		std::lock_guard lock{file_mutex_};
 
-		network_.publish(std::string{MQTT_TOPIC} + "/stats/flash/filesystem/size", std::to_string(FS.totalBytes()));
-		network_.publish(std::string{MQTT_TOPIC} + "/stats/flash/filesystem/used", std::to_string(FS.usedBytes()));
+		network_.publish(topic + "/flash/filesystem/size", std::to_string(FS.totalBytes()));
+		network_.publish(topic + "/flash/filesystem/used", std::to_string(FS.usedBytes()));
 	}
 
-	network_.publish(std::string{MQTT_TOPIC} + "/stats/uptime_us", std::to_string(esp_timer_get_time()));
+	network_.publish(topic + "/uptime_us", std::to_string(esp_timer_get_time()));
 
 	last_publish_us_ = esp_timer_get_time();
 }
