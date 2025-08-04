@@ -24,6 +24,7 @@
 
 #include <array>
 #include <bitset>
+#include <mutex>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -151,9 +152,13 @@ private:
 	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const;
 
 	Network &network_;
+
+	std::mutex file_mutex_;
 	ConfigFile file_;
-	ConfigData current_;
 	ConfigData last_saved_;
+
+	mutable std::recursive_mutex data_mutex_;
+	ConfigData current_;
 	bool dirty_{false};
 	bool saved_{false};
 };

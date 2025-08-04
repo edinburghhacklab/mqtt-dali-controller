@@ -21,6 +21,7 @@
 #include <esp_timer.h>
 
 #include <array>
+#include <mutex>
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
@@ -45,24 +46,34 @@ void Lights::loop() {
 }
 
 void Lights::startup_complete(bool state) {
+	std::lock_guard lock{publish_mutex_};
+
 	startup_complete_ = state;
 }
 
 void Lights::address_config_changed() {
+	std::lock_guard lock{publish_mutex_};
+
 	republish_groups_ = config_.group_names();
 }
 
 void Lights::address_config_changed(const std::string &group) {
+	std::lock_guard lock{publish_mutex_};
+
 	republish_groups_.insert(group);
 }
 
 std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
+	std::lock_guard lock{levels_mutex_};
+
 	return levels_;
 }
 
 void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {
 	const auto addresses = config_.get_addresses();
 	const auto light_ids = config_.parse_light_ids(lights);
+	std::lock_guard publish_lock{publish_mutex_};
+	std::lock_guard levels_lock{levels_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
 	bool changed = false;
 
@@ -102,6 +113,8 @@ void Lights::set_level(const std::string &lights, long level) {
 
 	const auto addresses = config_.get_addresses();
 	const auto light_ids = config_.parse_light_ids(lights);
+	std::lock_guard publish_lock{publish_mutex_};
+	std::lock_guard levels_lock{levels_mutex_};
 	bool changed = false;
 
 	for (int light_id : light_ids) {
@@ -124,6 +137,7 @@ void Lights::set_level(const std::string &lights, long level) {
 }
 
 void Lights::publish_active_presets() {
+	std::lock_guard publish_lock{publish_mutex_};
 	bool force = (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M);
 
 	if (!force && republish_groups_.empty() && republish_presets_.empty()) {

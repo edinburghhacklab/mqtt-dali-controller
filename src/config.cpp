@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <mutex>
 #include <iostream>
 #include <set>
 #include <sstream>
@@ -194,11 +195,19 @@ std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &lev
 }
 
 void Config::load_config() {
-	if (file_.read_config(current_)) {
-		last_saved_ = current_;
-		dirty_ = false;
-		saved_ = true;
+	std::lock_guard file_lock{file_mutex_};
+	ConfigData new_data;
+
+	if (!file_.read_config(new_data)) {
+		return;
 	}
+
+	std::lock_guard data_lock{data_mutex_};
+
+	current_ = new_data;
+	last_saved_ = current_;
+	dirty_ = false;
+	saved_ = true;
 }
 
 bool ConfigFile::read_config(ConfigData &data) {
@@ -572,10 +581,15 @@ bool ConfigFile::read_config_preset_levels(cbor::Reader &reader, std::array<int1
 }
 
 void Config::dirty_config() {
+	std::lock_guard lock{data_mutex_};
+
 	dirty_ = true;
 }
 
 void Config::save_config() {
+	std::lock_guard file_lock{file_mutex_};
+	std::unique_lock data_lock{data_mutex_};
+
 	if (saved_ && !dirty_) {
 		return;
 	}
@@ -585,8 +599,13 @@ void Config::save_config() {
 		return;
 	}
 
-	last_saved_ = current_;
-	file_.write_config(last_saved_);
+	ConfigData save_data{current_};
+
+	data_lock.unlock();
+	file_.write_config(save_data);
+	data_lock.lock();
+
+	last_saved_ = save_data;
 
 	/* Don't retry until the config changes again */
 	dirty_ = false;
@@ -690,6 +709,8 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 }
 
 void Config::publish_config() const {
+	std::lock_guard lock{data_mutex_};
+
 	network_.publish(std::string{MQTT_TOPIC} + "/addresses",
 		addresses_text(current_.lights), true);
 
@@ -717,6 +738,8 @@ void Config::publish_preset(const std::string &name, const std::array<int16_t,MA
 }
 
 std::bitset<MAX_ADDR+1> Config::get_addresses() const {
+	std::lock_guard lock{data_mutex_};
+
 	return get_group_addresses(BUILTIN_GROUP_ALL);
 }
 
@@ -724,6 +747,8 @@ std::unordered_set<std::string> Config::group_names() const {
 	std::unordered_set<std::string> all(MAX_GROUPS + 1);
 
 	all.insert(BUILTIN_GROUP_ALL);
+
+	std::lock_guard lock{data_mutex_};
 
 	for (const auto &groups : current_.groups) {
 		all.insert(groups.first);
@@ -733,6 +758,8 @@ std::unordered_set<std::string> Config::group_names() const {
 }
 
 std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) const {
+	std::lock_guard lock{data_mutex_};
+
 	if (group == BUILTIN_GROUP_ALL) {
 		return current_.lights;
 	} else {
@@ -747,10 +774,14 @@ std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) co
 }
 
 void Config::set_addresses(const std::string &addresses) {
+	std::lock_guard lock{data_mutex_};
+
 	set_addresses(BUILTIN_GROUP_ALL, addresses);
 }
 
 void Config::set_group_addresses(const std::string &name, const std::string &addresses) {
+	std::lock_guard lock{data_mutex_};
+
 	if (!valid_group_name(name)) {
 		return;
 	}
@@ -759,6 +790,7 @@ void Config::set_group_addresses(const std::string &name, const std::string &add
 }
 
 void Config::set_addresses(const std::string &group, std::string addresses) {
+	std::lock_guard lock{data_mutex_};
 	std::bitset<MAX_ADDR+1> lights;
 
 	auto before = group_addresses_text(group);
@@ -825,6 +857,7 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 }
 
 void Config::delete_group(const std::string &name) {
+	std::lock_guard lock{data_mutex_};
 	const auto it = current_.groups.find(name);
 
 	if (it == current_.groups.cend()) {
@@ -845,6 +878,8 @@ void Config::delete_group(const std::string &name) {
 }
 
 std::string Config::get_switch_name(unsigned int switch_id) const {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].name;
 	} else {
@@ -853,6 +888,8 @@ std::string Config::get_switch_name(unsigned int switch_id) const {
 }
 
 void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		auto new_name = name.substr(0, MAX_SWITCH_NAME_LEN);
 
@@ -869,6 +906,8 @@ void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
 }
 
 std::string Config::get_switch_group(unsigned int switch_id) const {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].group;
 	} else {
@@ -877,6 +916,8 @@ std::string Config::get_switch_group(unsigned int switch_id) const {
 }
 
 void Config::set_switch_group(unsigned int switch_id, const std::string &group) {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		if (!valid_group_name(group)) {
 			return;
@@ -895,6 +936,8 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 }
 
 std::string Config::get_switch_preset(unsigned int switch_id) const {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].preset;
 	} else {
@@ -903,6 +946,8 @@ std::string Config::get_switch_preset(unsigned int switch_id) const {
 }
 
 void Config::set_switch_preset(unsigned int switch_id, const std::string &preset) {
+	std::lock_guard lock{data_mutex_};
+
 	if (switch_id < NUM_SWITCHES) {
 		if (!valid_preset_name(preset)) {
 			return;
@@ -927,6 +972,8 @@ std::unordered_set<std::string> Config::preset_names() const {
 	all.insert(RESERVED_PRESET_CUSTOM);
 	all.insert(RESERVED_PRESET_UNKNOWN);
 
+	std::lock_guard lock{data_mutex_};
+
 	for (const auto &preset : current_.presets) {
 		all.insert(preset.first);
 	}
@@ -935,6 +982,8 @@ std::unordered_set<std::string> Config::preset_names() const {
 }
 
 bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const {
+	std::lock_guard lock{data_mutex_};
+
 	if (name == BUILTIN_PRESET_OFF) {
 		levels.fill(0);
 	} else {
@@ -959,6 +1008,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		return;
 	}
 
+	std::lock_guard lock{data_mutex_};
 	auto light_ids = parse_light_ids(lights);
 	auto it = current_.presets.find(name);
 
@@ -1009,6 +1059,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 		return;
 	}
 
+	std::lock_guard lock{data_mutex_};
 	auto it = current_.presets.find(name);
 
 	if (it == current_.presets.cend()) {
@@ -1063,6 +1114,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 }
 
 void Config::delete_preset(const std::string &name) {
+	std::lock_guard lock{data_mutex_};
 	const auto it = current_.presets.find(name);
 
 	if (it == current_.presets.cend()) {
@@ -1079,6 +1131,7 @@ void Config::delete_preset(const std::string &name) {
 }
 
 std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) const {
+	std::lock_guard lock{data_mutex_};
 	std::istringstream input{light_id};
 	std::string item;
 	std::set<unsigned int> light_ids;
@@ -1151,6 +1204,7 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) cons
 }
 
 std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
+	std::lock_guard lock{data_mutex_};
 	std::string prefix = "Light ";
 	std::string list = "";
 	unsigned int total = 0;

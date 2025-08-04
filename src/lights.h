@@ -18,6 +18,7 @@
 #pragma once
 
 #include <array>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -48,8 +49,12 @@ private:
 
 	Network &network_;
 	const Config &config_;
-	bool startup_complete_{false};
+
+	mutable std::recursive_mutex levels_mutex_;
 	std::array<uint8_t,MAX_ADDR+1> levels_{};
+
+	std::mutex publish_mutex_;
+	bool startup_complete_{false};
 	std::array<std::string,MAX_ADDR+1> active_presets_{};
 	std::unordered_set<std::string> republish_groups_;
 	std::unordered_set<std::string> republish_presets_;
