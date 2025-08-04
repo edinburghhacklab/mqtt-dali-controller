@@ -976,11 +976,10 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 }
 
 std::unordered_set<std::string> Config::preset_names() const {
-	std::unordered_set<std::string> all(MAX_PRESETS + 3);
+	std::unordered_set<std::string> all(MAX_PRESETS + 2);
 
 	all.insert(BUILTIN_PRESET_OFF);
 	all.insert(RESERVED_PRESET_CUSTOM);
-	all.insert(RESERVED_PRESET_UNKNOWN);
 
 	std::lock_guard lock{data_mutex_};
 

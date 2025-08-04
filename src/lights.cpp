@@ -36,7 +36,6 @@ Lights::Lights(Network &network, const Config &config)
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
-	republish_presets_.insert(RESERVED_PRESET_UNKNOWN);
 }
 
 void Lights::loop() {
