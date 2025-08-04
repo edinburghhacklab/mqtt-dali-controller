@@ -40,8 +40,6 @@ void make_thread(std::thread &t, const char *name, size_t stack_size,
 
 class WakeupThread {
 public:
-	static constexpr const char *TAG = "WakeupThread";
-
 	IRAM_ATTR void wake_up_isr();
 
 protected:
@@ -53,6 +51,8 @@ protected:
 	void wake_up();
 
 private:
+	static constexpr const char *TAG = "WakeupThread";
+
 	static void wake_up_timer(void *arg);
 
 	const char *name_;

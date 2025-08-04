@@ -37,6 +37,7 @@ public:
 	void ota_bad();
 
 private:
+	static constexpr const char *TAG = "UI";
 	static constexpr unsigned int LED_GPIO = 38;
 
 	UI(const UI&) = delete;

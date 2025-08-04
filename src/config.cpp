@@ -231,7 +231,7 @@ bool ConfigFile::read_config(ConfigData &data) {
 }
 
 bool ConfigFile::read_config(const std::string &filename, bool load) {
-	ESP_LOGE("config", "Reading config file %s", filename.c_str());
+	ESP_LOGE(TAG, "Reading config file %s", filename.c_str());
 	const char mode[2] = {'r', '\0'};
 	auto file = FS.open(filename.c_str(), mode);
 	if (file) {
@@ -239,28 +239,28 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 
 		if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag)
 				|| !reader.isWellFormed()) {
-			ESP_LOGE("config", "Failed to parse config file %s", filename.c_str());
+			ESP_LOGE(TAG, "Failed to parse config file %s", filename.c_str());
 			return false;
 		} else {
 			if (load) {
-				ESP_LOGE("config", "Loading config from file %s", filename.c_str());
+				ESP_LOGE(TAG, "Loading config from file %s", filename.c_str());
 				file.seek(0);
 
 				if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag))
 					return false;
 
 				if (read_config(reader)) {
-					ESP_LOGE("config", "Loaded config from file %s", filename.c_str());
+					ESP_LOGE(TAG, "Loaded config from file %s", filename.c_str());
 					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config", filename);
 					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 				} else {
-					ESP_LOGE("config", "Invalid config file %s", filename.c_str());
+					ESP_LOGE(TAG, "Invalid config file %s", filename.c_str());
 				}
 			}
 			return true;
 		}
 	} else {
-		ESP_LOGE("config", "Config file %s does not exist", filename.c_str());
+		ESP_LOGE(TAG, "Config file %s does not exist", filename.c_str());
 		return false;
 	}
 }
@@ -287,7 +287,7 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 				return false;
 			}
 
-			ESP_LOGE("config", "Lights = %s", Config::addresses_text(data_.lights).c_str());
+			ESP_LOGE(TAG, "Lights = %s", Config::addresses_text(data_.lights).c_str());
 		} else if (key == "groups") {
 			if (!read_config_groups(reader)) {
 				return false;
@@ -301,7 +301,7 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE("config", "Unknown key: %s", key.c_str());
+			ESP_LOGE(TAG, "Unknown key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -380,7 +380,7 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE("config", "Unknown group key: %s", key.c_str());
+			ESP_LOGE(TAG, "Unknown group key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -392,13 +392,13 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 		auto result = data_.groups.emplace(name, std::move(lights));
 
 		if (result.second) {
-			ESP_LOGE("config", "Group %s = %s", name.c_str(),
+			ESP_LOGE(TAG, "Group %s = %s", name.c_str(),
 				Config::addresses_text(result.first->second).c_str());
 		} else {
-			ESP_LOGE("config", "Ignoring duplicate group: %s", name.c_str());
+			ESP_LOGE(TAG, "Ignoring duplicate group: %s", name.c_str());
 		}
 	} else {
-		ESP_LOGE("config", "Ignoring invalid group: %s", name.c_str());
+		ESP_LOGE(TAG, "Ignoring invalid group: %s", name.c_str());
 	}
 
 	return true;
@@ -452,7 +452,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			ESP_LOGE("config", "Switch %u name = %s", switch_id, name.c_str());
+			ESP_LOGE(TAG, "Switch %u name = %s", switch_id, name.c_str());
 			data_.switches[switch_id].name = name;
 		} else if (key == "group") {
 			std::string group;
@@ -462,10 +462,10 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 
 			if (Config::valid_group_name(group)) {
-				ESP_LOGE("config", "Switch %u group = %s", switch_id, group.c_str());
+				ESP_LOGE(TAG, "Switch %u group = %s", switch_id, group.c_str());
 				data_.switches[switch_id].group = group;
 			} else {
-				ESP_LOGE("config", "Switch %u invalid group ignored: %s", switch_id, group.c_str());
+				ESP_LOGE(TAG, "Switch %u invalid group ignored: %s", switch_id, group.c_str());
 			}
 		} else if (key == "preset") {
 			std::string preset;
@@ -475,13 +475,13 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 
 			if (Config::valid_preset_name(preset)) {
-				ESP_LOGE("config", "Switch %u preset = %s", switch_id, preset.c_str());
+				ESP_LOGE(TAG, "Switch %u preset = %s", switch_id, preset.c_str());
 				data_.switches[switch_id].preset = preset;
 			} else {
-				ESP_LOGE("config", "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
+				ESP_LOGE(TAG, "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
 			}
 		} else {
-			ESP_LOGE("config", "Unknown switch %u key: %s", switch_id, key.c_str());
+			ESP_LOGE(TAG, "Unknown switch %u key: %s", switch_id, key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -537,7 +537,7 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE("config", "Unknown preset key: %s", key.c_str());
+			ESP_LOGE(TAG, "Unknown preset key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -549,13 +549,13 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 		auto result = data_.presets.emplace(name, std::move(levels));
 
 		if (result.second) {
-			ESP_LOGE("config", "Preset %s = %s", name.c_str(),
+			ESP_LOGE(TAG, "Preset %s = %s", name.c_str(),
 				Config::preset_levels_text(result.first->second, nullptr).c_str());
 		} else {
-			ESP_LOGE("config", "Ignoring duplicate preset: %s", name.c_str());
+			ESP_LOGE(TAG, "Ignoring duplicate preset: %s", name.c_str());
 		}
 	} else {
-		ESP_LOGE("config", "Ignoring invalid preset: %s", name.c_str());
+		ESP_LOGE(TAG, "Ignoring invalid preset: %s", name.c_str());
 	}
 
 	return true;
@@ -630,7 +630,7 @@ bool ConfigFile::write_config(const ConfigData &data) {
 }
 
 bool ConfigFile::write_config(const std::string &filename) const {
-	ESP_LOGE("config", "Writing config file %s", filename.c_str());
+	ESP_LOGE(TAG, "Writing config file %s", filename.c_str());
 	{
 		const char mode[2] = {'w', '\0'};
 		auto file = FS.open(filename.c_str(), mode);
@@ -641,12 +641,12 @@ bool ConfigFile::write_config(const std::string &filename) const {
 			write_config(writer);
 
 			if (file.getWriteError()) {
-				network_.report("config", std::string{"Failed to write config file "} + filename
+				network_.report(TAG, std::string{"Failed to write config file "} + filename
 						+ ": " + std::to_string(file.getWriteError()));
 				return false;
 			}
 		} else {
-			network_.report("config", std::string{"Unable to open config file "} + filename + " for writing");
+			network_.report(TAG, std::string{"Unable to open config file "} + filename + " for writing");
 			return false;
 		}
 	}
@@ -654,12 +654,12 @@ bool ConfigFile::write_config(const std::string &filename) const {
 		const char mode[2] = {'r', '\0'};
 		auto file = FS.open(filename.c_str(), mode);
 		if (file) {
-			ESP_LOGE("config", "Saved config to file %s", filename.c_str());
+			ESP_LOGE(TAG, "Saved config to file %s", filename.c_str());
 			network_.publish(std::string{MQTT_TOPIC} + "/saved_config", filename);
 			network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 			return true;
 		} else {
-			network_.report("config", std::string{"Unable to open config file "} + filename + " for reading");
+			network_.report(TAG, std::string{"Unable to open config file "} + filename + " for reading");
 			return false;
 		}
 	}
@@ -858,14 +858,14 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 
 	if (before != after) {
 		if (group == BUILTIN_GROUP_ALL) {
-			ESP_LOGE("lights", "Configure light addresses: %s", addresses.c_str());
+			ESP_LOGE(TAG, "Configure light addresses: %s", addresses.c_str());
 			network_.publish(std::string{MQTT_TOPIC} + "/addresses", after, true);
-			network_.report("lights", std::string{"Addresses: "}
+			network_.report(TAG, std::string{"Addresses: "}
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		} else {
-			ESP_LOGE("lights", "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
+			ESP_LOGE(TAG, "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
 			network_.publish(std::string{MQTT_TOPIC} + "/group/" + group, after, true);
-			network_.report("lights", std::string{"Group "} + group + " addresses: "
+			network_.report(TAG, std::string{"Group "} + group + " addresses: "
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		}
 	}
@@ -881,8 +881,8 @@ void Config::delete_group(const std::string &name) {
 		return;
 	}
 
-	ESP_LOGE("lights", "Delete group %s", name.c_str());
-	network_.report("groups", std::string{"Group "} + name + ": "
+	ESP_LOGE(TAG, "Delete group %s", name.c_str());
+	network_.report(TAG, std::string{"Group "} + name + ": "
 		+ quoted_string(group_addresses_text(name)) + " (deleted)");
 
 	current_.groups.erase(it);
@@ -911,7 +911,7 @@ void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
 		auto new_name = name.substr(0, MAX_SWITCH_NAME_LEN);
 
 		if (current_.switches[switch_id].name != new_name) {
-			network_.report("switch", std::string{"Switch "}
+			network_.report(TAG, std::string{"Switch "}
 				+ std::to_string(switch_id) + " name: "
 				+ quoted_string(current_.switches[switch_id].name)
 				+ " -> " + quoted_string(new_name));
@@ -941,7 +941,7 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 		}
 
 		if (current_.switches[switch_id].group != group) {
-			network_.report("switch", std::string{"Switch "}
+			network_.report(TAG, std::string{"Switch "}
 				+ std::to_string(switch_id) + " group: "
 				+ quoted_string(current_.switches[switch_id].group)
 				+ " -> " + quoted_string(group));
@@ -971,7 +971,7 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 		}
 
 		if (current_.switches[switch_id].preset != preset) {
-			network_.report("switch", std::string{"Switch "}
+			network_.report(TAG, std::string{"Switch "}
 				+ std::to_string(switch_id) + " preset: "
 				+ quoted_string(current_.switches[switch_id].preset)
 				+ " -> " + quoted_string(preset));
@@ -1065,11 +1065,11 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		publish_preset(it->first, it->second);
 	}
 
-	network_.report("presets", std::string{"Preset "} + name + ": "
+	network_.report(TAG, std::string{"Preset "} + name + ": "
 		+ lights_text(light_ids) + " = " + std::to_string(level));
 
 	if (before != after) {
-		network_.report("presets", std::string{"Preset "} + name + ": "
+		network_.report(TAG, std::string{"Preset "} + name + ": "
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 
@@ -1128,7 +1128,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 	if (before != after) {
 		publish_preset(it->first, it->second);
-		network_.report("presets", std::string{"Preset "} + name + ": "
+		network_.report(TAG, std::string{"Preset "} + name + ": "
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 
@@ -1143,7 +1143,7 @@ void Config::delete_preset(const std::string &name) {
 		return;
 	}
 
-	network_.report("presets", std::string{"Preset "} + name + ": "
+	network_.report(TAG, std::string{"Preset "} + name + ": "
 		+ quoted_string(preset_levels_text(it->second, &current_.lights))
 		+ " (deleted)");
 

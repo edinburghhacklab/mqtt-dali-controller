@@ -69,6 +69,7 @@ public:
 	size_t maximum_queue_size();
 
 private:
+	static constexpr const char *TAG = "UI";
 	static constexpr size_t MAX_QUEUED_MESSAGES = 1000;
 	static constexpr size_t SEND_QUEUE_DIVISOR = 10;
 

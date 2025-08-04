@@ -117,7 +117,7 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 
 	if (changed) {
 		if (!internal) {
-			network_.report("lights", config_.lights_text(light_ids) + " = " + name);
+			network_.report(TAG, config_.lights_text(light_ids) + " = " + name);
 		}
 
 		publish_levels(true);
@@ -158,7 +158,7 @@ void Lights::set_level(const std::string &lights, long level) {
 		return;
 	}
 
-	network_.report("lights", config_.lights_text(light_ids) + " = " + std::to_string(level));
+	network_.report(TAG, config_.lights_text(light_ids) + " = " + std::to_string(level));
 	publish_levels(true);
 }
 

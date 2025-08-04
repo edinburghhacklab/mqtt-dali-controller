@@ -79,6 +79,8 @@ public:
 	bool write_config(const ConfigData &data);
 
 private:
+	static constexpr const char *TAG = "ConfigFile";
+
 	bool read_config(const std::string &filename, bool load);
 	bool read_config(cbor::Reader &reader);
 	bool read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights);
@@ -142,6 +144,7 @@ public:
 	std::string lights_text(const std::set<unsigned int> &light_ids) const;
 
 private:
+	static constexpr const char *TAG = "Config";
 	static constexpr size_t MAX_GROUPS = 10;
 	static constexpr size_t MAX_GROUP_NAME_LEN = 50;
 	static constexpr size_t MAX_PRESETS = 10;

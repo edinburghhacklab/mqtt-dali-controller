@@ -152,7 +152,7 @@ void Network::loop(std::function<void()> connected) {
 	case WL_CONNECTION_LOST:
 	case WL_DISCONNECTED:
 		if (!last_wifi_us_ || wifi_up_ || esp_timer_get_time() - last_wifi_us_ > 30 * ONE_S) {
-			ESP_LOGE("network", "WiFi reconnect");
+			ESP_LOGE(TAG, "WiFi reconnect");
 			WiFi.disconnect();
 			WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 			last_wifi_us_ = esp_timer_get_time();
@@ -162,7 +162,7 @@ void Network::loop(std::function<void()> connected) {
 
 	case WL_CONNECTED:
 		if (!wifi_up_) {
-			ESP_LOGE("network", "WiFi connected");
+			ESP_LOGE(TAG, "WiFi connected");
 			wifi_up_ = true;
 		}
 		break;
@@ -176,14 +176,14 @@ void Network::loop(std::function<void()> connected) {
 
 	if (wifi_up_) {
 		if (!mqtt_.connected() && (!last_mqtt_us_ || esp_timer_get_time() - last_mqtt_us_ > ONE_S)) {
-			ESP_LOGE("network", "MQTT connecting");
+			ESP_LOGE(TAG, "MQTT connecting");
 			mqtt_.connect(device_id_.c_str());
 
 			if (mqtt_.connected()) {
-				ESP_LOGE("network", "MQTT connected");
+				ESP_LOGE(TAG, "MQTT connected");
 				connected();
 			} else {
-				ESP_LOGE("network", "MQTT connection failed");
+				ESP_LOGE(TAG, "MQTT connection failed");
 			}
 		}
 	}

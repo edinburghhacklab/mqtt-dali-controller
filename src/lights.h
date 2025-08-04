@@ -49,6 +49,7 @@ public:
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
 
 private:
+	static constexpr const char *TAG = "Lights";
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
 	static constexpr uint64_t IDLE_US = 10 * ONE_S;
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);

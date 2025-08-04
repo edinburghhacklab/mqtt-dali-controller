@@ -45,6 +45,7 @@ public:
 	void setup();
 
 private:
+	static constexpr const char *TAG = "Switches";
 	static constexpr unsigned long DEBOUNCE_US = 20 * 1000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 

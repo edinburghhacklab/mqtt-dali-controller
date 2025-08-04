@@ -193,7 +193,7 @@ void UI::ota_update() {
 	esp_https_ota_config_t ota_config{};
 	esp_https_ota_handle_t handle{};
 
-	ESP_LOGE("ota", "OTA update");
+	ESP_LOGE(TAG, "OTA update");
 
 	http_config.crt_bundle_attach = arduino_esp_crt_bundle_attach;
 	http_config.disable_auto_redirect = true;
@@ -202,13 +202,13 @@ void UI::ota_update() {
 
 	esp_err_t err = esp_https_ota_begin(&ota_config, &handle);
 	if (err) {
-		network_.report("ota", std::string{"OTA begin failed: "} + std::to_string(err));
+		network_.report(TAG, std::string{"OTA begin failed: "} + std::to_string(err));
 		return;
 	}
 
 	const int size = esp_https_ota_get_image_size(handle);
 
-	network_.report("ota", std::string{"OTA size: "} + std::to_string(size));
+	network_.report(TAG, std::string{"OTA size: "} + std::to_string(size));
 
 	while (true) {
 		err = esp_https_ota_perform(handle);
@@ -216,14 +216,14 @@ void UI::ota_update() {
 		if (err == ESP_OK) {
 			err = esp_https_ota_finish(handle);
 			if (err) {
-				network_.report("ota", std::string{"OTA finish failed: "} + std::to_string(err));
+				network_.report(TAG, std::string{"OTA finish failed: "} + std::to_string(err));
 			} else {
-				network_.report("ota", std::string{"OTA finished"});
+				network_.report(TAG, std::string{"OTA finished"});
 			}
 			publish_partitions();
 			return;
 		} else if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
-			network_.report("ota", std::string{"OTA perform failed: "} + std::to_string(err));
+			network_.report(TAG, std::string{"OTA perform failed: "} + std::to_string(err));
 			esp_https_ota_abort(handle);
 			publish_partitions();
 			return;
@@ -248,10 +248,10 @@ void UI::ota_result(bool good) {
 
 	if (state == ESP_OTA_IMG_PENDING_VERIFY) {
 		if (good) {
-			ESP_LOGE("ota", "OTA good");
+			ESP_LOGE(TAG, "OTA good");
 			esp_ota_mark_app_valid_cancel_rollback();
 		} else {
-			ESP_LOGE("ota", "OTA bad");
+			ESP_LOGE(TAG, "OTA bad");
 			esp_ota_mark_app_invalid_rollback_and_reboot();
 		}
 	}

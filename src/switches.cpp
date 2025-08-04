@@ -90,7 +90,7 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 				name += std::to_string(switch_id);
 			}
 
-			network_.report("switch", name + " " + (active ? "ON" : "OFF")
+			network_.report(TAG, name + " " + (active ? "ON" : "OFF")
 				+ " (levels reset to " + preset + ")");
 
 			lights_.select_preset(preset, group, true);

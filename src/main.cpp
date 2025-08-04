@@ -33,6 +33,8 @@
 #include "ui.h"
 #include "util.h"
 
+static constexpr const char *TAG = "main";
+
 /**
  * LittleFS is NOT thread-safe. Lock this global mutex when accessing the
  * filesystem.
@@ -93,7 +95,7 @@ void setup() {
 
 		if (topic_str == "/startup_complete") {
 			if (!startup_complete) {
-				ESP_LOGE("main", "Startup complete");
+				ESP_LOGE(TAG, "Startup complete");
 				set_startup_complete(true);
 				config.publish_config();
 			}
