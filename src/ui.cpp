@@ -18,6 +18,7 @@
 #include "ui.h"
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
 #include <esp_crt_bundle.h>
 #include <esp_https_ota.h>
 #include <esp_ota_ops.h>
@@ -158,6 +159,7 @@ void UI::publish_stats() {
 		network_.publish(topic + "/flash/filesystem/used", std::to_string(FS.usedBytes()));
 	}
 
+	network_.publish(topic + "/stack/min_size", std::to_string(uxTaskGetStackHighWaterMark(nullptr)));
 	network_.publish(topic + "/max_queue_size", std::to_string(network_.maximum_queue_size()));
 	network_.publish(topic + "/uptime_us", std::to_string(esp_timer_get_time()));
 

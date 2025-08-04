@@ -46,6 +46,7 @@ private:
 	void publish_boot();
 	void publish_partitions();
 	void publish_stats();
+	void publish_tasks();
 
 	void ota_result(bool good);
 
