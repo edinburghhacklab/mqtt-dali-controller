@@ -15,6 +15,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/**
+ * Config writes are saved asynchronously by marking it as dirty and then saving
+ * it to a file on the main loop. Config reads will always get the latest data,
+ * without blocking on the file write and even if it hasn't been saved yet.
+ */
 #include "config.h"
 
 #include <Arduino.h>
@@ -601,14 +606,18 @@ void Config::save_config() {
 
 	ConfigData save_data{current_};
 
+	/*
+	 * If the config changes while we're writing it,
+	 * it'll have to be written again.
+	 */
+	dirty_ = false;
+
 	data_lock.unlock();
+	/* If this fails, don't retry - wait until the config changes again */
 	file_.write_config(save_data);
 	data_lock.lock();
 
 	last_saved_ = save_data;
-
-	/* Don't retry until the config changes again */
-	dirty_ = false;
 	saved_ = true;
 }
 

@@ -156,9 +156,9 @@ private:
 	std::mutex file_mutex_;
 	ConfigFile file_;
 	ConfigData last_saved_;
+	bool saved_{false};
 
 	mutable std::recursive_mutex data_mutex_;
 	ConfigData current_;
 	bool dirty_{false};
-	bool saved_{false};
 };
