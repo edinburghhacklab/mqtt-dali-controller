@@ -56,9 +56,17 @@ private:
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
 
+	static uint32_t rtc_crc(const std::array<uint32_t,MAX_ADDR+1> &levels);
+
 	void publish_active_presets();
 	void publish_levels(bool force);
 	bool is_idle();
+
+	void load_rtc_state();
+	void save_rtc_state();
+
+	static uint32_t rtc_levels_[MAX_ADDR+1];
+	static uint32_t rtc_crc_;
 
 	Network &network_;
 	const Config &config_;

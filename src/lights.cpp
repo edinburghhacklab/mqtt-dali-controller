@@ -19,6 +19,7 @@
 #include "lights.h"
 
 #include <Arduino.h>
+#include <esp_crc.h>
 #include <esp_timer.h>
 
 #include <array>
@@ -33,12 +34,16 @@
 #include "network.h"
 #include "util.h"
 
+RTC_NOINIT_ATTR uint32_t Lights::rtc_levels_[MAX_ADDR+1];
+RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
+
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
 	levels_.fill(0xFF);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
+	load_rtc_state();
 }
 
 void Lights::loop() {
@@ -75,6 +80,46 @@ std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
 
 bool Lights::is_idle() {
 	return esp_timer_get_time() - last_activity_us_ >= IDLE_US;
+}
+
+uint32_t Lights::rtc_crc(const std::array<uint32_t,MAX_ADDR+1> &levels) {
+	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&levels), sizeof(levels));
+}
+
+void Lights::load_rtc_state() {
+	if (esp_reset_reason() == ESP_RST_POWERON) {
+		ESP_LOGE(TAG, "Ignoring light levels in RTC memory, first power on");
+		return;
+	}
+
+	std::array<uint32_t,MAX_ADDR+1> levels;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		levels[i] = rtc_levels_[i];
+	}
+
+	uint32_t expected_crc = rtc_crc(levels);
+
+	if (rtc_crc_ == expected_crc) {
+		ESP_LOGE(TAG, "Restoring light levels from RTC memory");
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			levels_[i] = levels[i];
+		}
+	} else {
+		ESP_LOGE(TAG, "Ignoring light levels in RTC memory, checksum mismatch 0x%08X != 0x%08X",
+			rtc_crc_, expected_crc);
+	}
+}
+
+void Lights::save_rtc_state() {
+	std::array<uint32_t,MAX_ADDR+1> levels;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		levels[i] = levels_[i];
+		rtc_levels_[i] = levels[i];
+	}
+
+	rtc_crc_ = rtc_crc(levels);
 }
 
 void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {
@@ -116,6 +161,8 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 	last_activity_us_ = esp_timer_get_time();
 
 	if (changed) {
+		save_rtc_state();
+
 		if (!internal) {
 			network_.report(TAG, config_.lights_text(light_ids) + " = " + name);
 		}
@@ -158,6 +205,7 @@ void Lights::set_level(const std::string &lights, long level) {
 		return;
 	}
 
+	save_rtc_state();
 	network_.report(TAG, config_.lights_text(light_ids) + " = " + std::to_string(level));
 	publish_levels(true);
 }

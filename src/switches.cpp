@@ -19,6 +19,7 @@
 #include "switches.h"
 
 #include <Arduino.h>
+#include <esp_crc.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 
@@ -33,12 +34,16 @@
 
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
+RTC_NOINIT_ATTR uint32_t Switches::rtc_states_[NUM_SWITCHES];
+RTC_NOINIT_ATTR uint32_t Switches::rtc_crc_;
+
 Switches::Switches(Network &network, const Config &config, Lights &lights)
 		: WakeupThread("switches", true), network_(network),
 		config_(config), lights_(lights), debounce_({
 			Debounce{(gpio_num_t)SWITCH_GPIO[0], true, DEBOUNCE_US},
 			Debounce{(gpio_num_t)SWITCH_GPIO[1], true, DEBOUNCE_US},
 		}) {
+	load_rtc_state();
 }
 
 void Switches::setup() {
@@ -69,6 +74,14 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 	DebounceResult debounce = debounce_[switch_id].run();
 
 	if (debounce.changed) {
+		bool ignore = false;
+
+		if (debounce_[switch_id].first() && using_rtc_state_) {
+			if (state_[switch_id].active == debounce_[switch_id].value()) {
+				ignore = true;
+			}
+		}
+
 		state_[switch_id].active = debounce_[switch_id].value();
 		ESP_LOGE(TAG, "Switch %u turned %s", switch_id,
 			state_[switch_id].active ? "on" : "off");
@@ -83,8 +96,7 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 				state_[switch_id].active);
 		}
 
-		if (!debounce_[switch_id].first()
-				&& !group.empty() && !preset.empty()) {
+		if (!ignore && !group.empty() && !preset.empty()) {
 			std::string name = config_.get_switch_name(switch_id);
 
 			if (name.empty()) {
@@ -98,6 +110,8 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 
 			lights_.select_preset(preset, group, true);
 		}
+
+		save_rtc_state();
 	} else if (state_[switch_id].report_us
 			&& esp_timer_get_time() - state_[switch_id].report_us >= ONE_M) {
 		if (!group.empty()) {
@@ -112,4 +126,45 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 	}
 
 	return debounce.wait_ms;
+}
+
+uint32_t Switches::rtc_crc(const std::array<uint32_t,NUM_SWITCHES> &states) {
+	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&states), sizeof(states));
+}
+
+void Switches::load_rtc_state() {
+	if (esp_reset_reason() == ESP_RST_POWERON) {
+		ESP_LOGE(TAG, "Ignoring switch states in RTC memory, first power on");
+		return;
+	}
+
+	std::array<uint32_t,NUM_SWITCHES> states;
+
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		states[i] = rtc_states_[i];
+	}
+
+	uint32_t expected_crc = rtc_crc(states);
+
+	if (rtc_crc_ == expected_crc) {
+		ESP_LOGE(TAG, "Restoring switch states from RTC memory");
+		for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+			state_[i].active = states[i];
+		}
+		using_rtc_state_ = true;
+	} else {
+		ESP_LOGE(TAG, "Ignoring switch states in RTC memory, checksum mismatch 0x%08X != 0x%08X",
+			rtc_crc_, expected_crc);
+	}
+}
+
+void Switches::save_rtc_state() {
+	std::array<uint32_t,NUM_SWITCHES> states;
+
+	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+		states[i] = state_[i].active;
+		rtc_states_[i] = states[i];
+	}
+
+	rtc_crc_ = rtc_crc(states);
 }

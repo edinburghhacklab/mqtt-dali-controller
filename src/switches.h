@@ -51,12 +51,21 @@ private:
 
 	~Switches() = delete;
 
+	static uint32_t rtc_crc(const std::array<uint32_t,NUM_SWITCHES> &states);
+
 	unsigned long run_tasks() override;
 	unsigned long run_switch(unsigned int switch_id);
+
+	void load_rtc_state();
+	void save_rtc_state();
+
+	static uint32_t rtc_states_[NUM_SWITCHES];
+	static uint32_t rtc_crc_;
 
 	Network &network_;
 	const Config &config_;
 	Lights &lights_;
 	std::array<Debounce,NUM_SWITCHES> debounce_;
 	std::array<SwitchState,NUM_SWITCHES> state_;
+	bool using_rtc_state_{false};
 };
