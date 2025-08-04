@@ -167,7 +167,7 @@ void UI::loop() {
 	}
 
 	if (startup_complete_ && network_.connected()) {
-		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M) {
+		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= FIVE_M) {
 			publish_stats();
 		}
 	}
