@@ -1,4 +1,5 @@
 /*
+ * mqtt-dali-controller
  * Copyright 2025  Simon Arlott
  *
  * This program is free software: you can redistribute it and/or modify

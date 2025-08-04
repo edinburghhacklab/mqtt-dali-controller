@@ -1,4 +1,5 @@
 /*
+ * mqtt-dali-controller
  * Copyright 2025  Simon Arlott
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,8 +19,10 @@
 #include "switches.h"
 
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 #include <esp_timer.h>
 
+#include <algorithm>
 #include <array>
 #include <string>
 
@@ -31,53 +34,74 @@
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
 Switches::Switches(Network &network, const Config &config, Lights &lights)
-		: network_(network), config_(config), lights_(lights) {
+		: WakeupThread("switches", true), network_(network),
+		config_(config), lights_(lights), debounce_({
+			Debounce{(gpio_num_t)SWITCH_GPIO[0], true, DEBOUNCE_US},
+			Debounce{(gpio_num_t)SWITCH_GPIO[1], true, DEBOUNCE_US},
+		}) {
 }
 
 void Switches::setup() {
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		pinMode(SWITCH_GPIO[i], INPUT_PULLUP);
+		debounce_[i].start(*this);
 	}
+
+	std::thread t;
+	make_thread(t, "switches", 4096, 19, &Switches::run_loop, this);
+	t.detach();
 }
 
-void Switches::loop() {
+unsigned long Switches::run_tasks() {
+	unsigned long wait_ms = WATCHDOG_INTERVAL_MS;
+
+	esp_task_wdt_reset();
+
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		auto group = config_.get_switch_group(i);
-		auto preset = config_.get_switch_preset(i);
-		int switch_value = (preset.empty() || group.empty())
-			? LOW : digitalRead(SWITCH_GPIO[i]);
+		wait_ms = std::min(wait_ms, run_switch(i));
+	}
 
-		lights_.set_power(config_.get_group_addresses(group),
-			switch_value == LOW);
+	return wait_ms;
+}
 
-		if (switch_value != state_[i].value) {
-			state_[i].value = switch_value;
+unsigned long Switches::run_switch(unsigned int switch_id) {
+	auto group = config_.get_switch_group(switch_id);
+	auto preset = config_.get_switch_preset(switch_id);
+	DebounceResult debounce = debounce_[switch_id].run();
+	bool active = (preset.empty() || group.empty())
+		? false : debounce_[switch_id].value();
 
-			std::string name = config_.get_switch_name(i);
+	if (!group.empty()) {
+		lights_.set_power(config_.get_group_addresses(group), active);
+	}
+
+	if (active != state_[switch_id].active) {
+		state_[switch_id].active = active;
+
+		network_.publish(std::string{MQTT_TOPIC}
+			+ "/switch/" + std::to_string(switch_id) + "/state",
+			state_[switch_id].active ? "1" : "0", true);
+		state_[switch_id].report_us = esp_timer_get_time();
+
+		if (!group.empty() && !preset.empty()) {
+			std::string name = config_.get_switch_name(switch_id);
 
 			if (name.empty()) {
 				name = "Light switch ";
-				name += std::to_string(i);
+				name += std::to_string(switch_id);
 			}
 
-			network_.publish(std::string{MQTT_TOPIC}
-				+ "/switch/" + std::to_string(i) + "/state",
-				state_[i].value == LOW ? "1" : "0",
-				true);
-			state_[i].report_us = esp_timer_get_time();
-
-			network_.report("switch", name + " "
-				+ (state_[i].value == LOW ? "ON" : "OFF")
+			network_.report("switch", name + " " + (active ? "ON" : "OFF")
 				+ " (levels reset to " + preset + ")");
 
 			lights_.select_preset(preset, group, true);
-		} else if (state_[i].report_us
-				&& esp_timer_get_time() - state_[i].report_us >= ONE_M) {
-			network_.publish(std::string{MQTT_TOPIC}
-				+ "/switch/" + std::to_string(i) + "/state",
-				state_[i].value == LOW ? "1" : "0",
-				true);
-			state_[i].report_us = esp_timer_get_time();
 		}
+	} else if (state_[switch_id].report_us
+			&& esp_timer_get_time() - state_[switch_id].report_us >= ONE_M) {
+		network_.publish(std::string{MQTT_TOPIC}
+			+ "/switch/" + std::to_string(switch_id) + "/state",
+			state_[switch_id].active ? "1" : "0", true);
+		state_[switch_id].report_us = esp_timer_get_time();
 	}
+
+	return debounce.wait_ms;
 }

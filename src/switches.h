@@ -1,4 +1,5 @@
 /*
+ * mqtt-dali-controller
  * Copyright 2025  Simon Arlott
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,6 +21,9 @@
 #include <Arduino.h>
 #include <array>
 
+#include "debounce.h"
+#include "thread.h"
+
 static constexpr unsigned int NUM_SWITCHES = 2;
 
 class Config;
@@ -27,22 +31,31 @@ class Lights;
 class Network;
 
 struct SwitchState {
-	SwitchState() : value(LOW), report_us(0) {}
+public:
+	SwitchState() = default;
 
-	int value;
-	uint64_t report_us;
+	bool active{true};
+	uint64_t report_us{0};
 };
 
-class Switches {
+class Switches: public WakeupThread {
 public:
 	Switches(Network &network, const Config &config, Lights &lights);
 
 	void setup();
-	void loop();
 
 private:
+	static constexpr unsigned long DEBOUNCE_US = 20 * 1000;
+	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
+
+	~Switches() = delete;
+
+	unsigned long run_tasks() override;
+	unsigned long run_switch(unsigned int switch_id);
+
 	Network &network_;
 	const Config &config_;
 	Lights &lights_;
+	std::array<Debounce,NUM_SWITCHES> debounce_;
 	std::array<SwitchState,NUM_SWITCHES> state_;
 };

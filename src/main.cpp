@@ -1,4 +1,5 @@
 /*
+ * mqtt-dali-controller
  * Copyright 2025  Simon Arlott
  *
  * This program is free software: you can redistribute it and/or modify
@@ -43,7 +44,6 @@ static UI ui{file_mutex, network};
 static Config config{file_mutex, network};
 static Lights lights{network, config};
 static Dali dali{config, lights};
-static Switches switches{network, config, lights};
 static bool startup_complete{false};
 
 namespace cbor = qindesign::cbor;
@@ -67,9 +67,13 @@ bool testSPIRAM() {
 }
 
 void setup() {
+	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL2));
+
+	Switches &switches = *new Switches{network, config, lights};
+
 	dali.setup();
-	switches.setup();
 	config.setup();
+	switches.setup();
 	ui.setup();
 
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
@@ -188,7 +192,6 @@ void setup() {
 }
 
 void loop() {
-	switches.loop();
 	dali.loop();
 	lights.loop();
 	ui.loop();
