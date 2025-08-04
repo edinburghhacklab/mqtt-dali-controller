@@ -32,7 +32,7 @@ class Network;
 
 class Lights {
 public:
-	Lights(Network &network, Config &config);
+	Lights(Network &network, const Config &config);
 
 	void loop();
 	void startup_complete(bool state);
@@ -47,7 +47,7 @@ private:
 	void publish_active_presets();
 
 	Network &network_;
-	Config &config_;
+	const Config &config_;
 	bool startup_complete_{false};
 	std::array<uint8_t,MAX_ADDR+1> levels_{};
 	std::array<std::string,MAX_ADDR+1> active_presets_{};

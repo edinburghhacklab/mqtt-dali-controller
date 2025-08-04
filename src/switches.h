@@ -35,14 +35,14 @@ struct SwitchState {
 
 class Switches {
 public:
-	Switches(Network &network, Config &config, Lights &lights);
+	Switches(Network &network, const Config &config, Lights &lights);
 
 	void setup();
 	void loop();
 
 private:
 	Network &network_;
-	Config &config_;
+	const Config &config_;
 	Lights &lights_;
 	std::array<SwitchState,NUM_SWITCHES> state_;
 };

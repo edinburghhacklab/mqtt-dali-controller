@@ -30,7 +30,7 @@
 
 static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
 
-Switches::Switches(Network &network, Config &config, Lights &lights)
+Switches::Switches(Network &network, const Config &config, Lights &lights)
 		: network_(network), config_(config), lights_(lights) {
 }
 

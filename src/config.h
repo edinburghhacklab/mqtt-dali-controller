@@ -88,8 +88,8 @@ private:
 	bool read_config_preset(cbor::Reader &reader);
 	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
 
-	void write_config(cbor::Writer &writer);
-	bool write_config(const std::string &filename);
+	void write_config(cbor::Writer &writer) const;
+	bool write_config(const std::string &filename) const;
 
 	Network &network_;
 	ConfigData data_;
@@ -109,35 +109,35 @@ public:
 	void loop();
 	void load_config();
 	void save_config();
-	void publish_config();
+	void publish_config() const;
 
-	std::bitset<MAX_ADDR+1> get_addresses();
+	std::bitset<MAX_ADDR+1> get_addresses() const;
 	void set_addresses(const std::string &addresses);
-	std::string addresses_text();
+	std::string addresses_text() const;
 
-	std::unordered_set<std::string> group_names();
-	std::bitset<MAX_ADDR+1> get_group_addresses(const std::string &name);
+	std::unordered_set<std::string> group_names() const;
+	std::bitset<MAX_ADDR+1> get_group_addresses(const std::string &name) const;
 	void set_group_addresses(const std::string &name, const std::string &addresses);
-	std::string group_addresses_text(const std::string &name);
+	std::string group_addresses_text(const std::string &name) const;
 	void delete_group(const std::string &name);
 
-	std::string get_switch_name(unsigned int switch_id);
+	std::string get_switch_name(unsigned int switch_id) const;
 	void set_switch_name(unsigned int switch_id, const std::string &name);
 
-	std::string get_switch_group(unsigned int switch_id);
+	std::string get_switch_group(unsigned int switch_id) const;
 	void set_switch_group(unsigned int switch_id, const std::string &name);
 
-	std::string get_switch_preset(unsigned int switch_id);
+	std::string get_switch_preset(unsigned int switch_id) const;
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
-	std::unordered_set<std::string> preset_names();
-	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels);
+	std::unordered_set<std::string> preset_names() const;
+	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;
 	void set_preset(const std::string &name, const std::string &lights, long level);
 	void set_preset(const std::string &name, std::string levels);
 	void delete_preset(const std::string &name);
 
-	std::set<unsigned int> parse_light_ids(const std::string &light_id);
-	std::string lights_text(const std::set<unsigned int> &light_ids);
+	std::set<unsigned int> parse_light_ids(const std::string &light_id) const;
+	std::string lights_text(const std::set<unsigned int> &light_ids) const;
 
 private:
 	static constexpr size_t MAX_GROUPS = 10;
@@ -148,7 +148,7 @@ private:
 
 	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);
-	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels);
+	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const;
 
 	Network &network_;
 	ConfigFile file_;

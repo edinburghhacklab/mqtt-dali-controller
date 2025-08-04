@@ -27,7 +27,7 @@
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 
-Dali::Dali(Config &config, Lights &lights) : config_(config), lights_(lights) {
+Dali::Dali(const Config &config, const Lights &lights) : config_(config), lights_(lights) {
 }
 
 void Dali::transmit_one(uint8_t address, uint8_t level) {

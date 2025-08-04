@@ -30,7 +30,7 @@
 #include "network.h"
 #include "util.h"
 
-Lights::Lights(Network &network, Config &config)
+Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);

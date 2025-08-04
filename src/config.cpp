@@ -152,11 +152,11 @@ bool Config::valid_preset_name(const std::string &name) {
 	return true;
 }
 
-std::string Config::addresses_text() {
+std::string Config::addresses_text() const {
 	return addresses_text(get_addresses());
 }
 
-std::string Config::group_addresses_text(const std::string &group) {
+std::string Config::group_addresses_text(const std::string &group) const {
 	return addresses_text(get_group_addresses(group));
 }
 
@@ -598,7 +598,7 @@ bool ConfigFile::write_config(const ConfigData &data) {
 	return write_config(FILENAME) && read_config(FILENAME, false) && write_config(BACKUP_FILENAME);
 }
 
-bool ConfigFile::write_config(const std::string &filename) {
+bool ConfigFile::write_config(const std::string &filename) const {
 	ESP_LOGE("config", "Writing config file %s", filename.c_str());
 	{
 		const char mode[2] = {'w', '\0'};
@@ -634,7 +634,7 @@ bool ConfigFile::write_config(const std::string &filename) {
 	}
 }
 
-void ConfigFile::write_config(cbor::Writer &writer) {
+void ConfigFile::write_config(cbor::Writer &writer) const {
 	writer.beginMap(4);
 
 	writeText(writer, "lights");
@@ -689,7 +689,7 @@ void ConfigFile::write_config(cbor::Writer &writer) {
 	}
 }
 
-void Config::publish_config() {
+void Config::publish_config() const {
 	network_.publish(std::string{MQTT_TOPIC} + "/addresses",
 		addresses_text(current_.lights), true);
 
@@ -711,16 +711,16 @@ void Config::publish_config() {
 	}
 }
 
-void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) {
+void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const {
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels",
 		preset_levels_text(levels, nullptr), true);
 }
 
-std::bitset<MAX_ADDR+1> Config::get_addresses() {
+std::bitset<MAX_ADDR+1> Config::get_addresses() const {
 	return get_group_addresses(BUILTIN_GROUP_ALL);
 }
 
-std::unordered_set<std::string> Config::group_names() {
+std::unordered_set<std::string> Config::group_names() const {
 	std::unordered_set<std::string> all(MAX_GROUPS + 1);
 
 	all.insert(BUILTIN_GROUP_ALL);
@@ -732,7 +732,7 @@ std::unordered_set<std::string> Config::group_names() {
 	return all;
 }
 
-std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) {
+std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) const {
 	if (group == BUILTIN_GROUP_ALL) {
 		return current_.lights;
 	} else {
@@ -844,7 +844,7 @@ void Config::delete_group(const std::string &name) {
 	dirty_config();
 }
 
-std::string Config::get_switch_name(unsigned int switch_id) {
+std::string Config::get_switch_name(unsigned int switch_id) const {
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].name;
 	} else {
@@ -868,7 +868,7 @@ void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
 	}
 }
 
-std::string Config::get_switch_group(unsigned int switch_id) {
+std::string Config::get_switch_group(unsigned int switch_id) const {
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].group;
 	} else {
@@ -894,7 +894,7 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 	}
 }
 
-std::string Config::get_switch_preset(unsigned int switch_id) {
+std::string Config::get_switch_preset(unsigned int switch_id) const {
 	if (switch_id < NUM_SWITCHES) {
 		return current_.switches[switch_id].preset;
 	} else {
@@ -920,7 +920,7 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 	}
 }
 
-std::unordered_set<std::string> Config::preset_names() {
+std::unordered_set<std::string> Config::preset_names() const {
 	std::unordered_set<std::string> all(MAX_PRESETS + 3);
 
 	all.insert(BUILTIN_PRESET_OFF);
@@ -934,7 +934,7 @@ std::unordered_set<std::string> Config::preset_names() {
 	return all;
 }
 
-bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) {
+bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const {
 	if (name == BUILTIN_PRESET_OFF) {
 		levels.fill(0);
 	} else {
@@ -1078,7 +1078,7 @@ void Config::delete_preset(const std::string &name) {
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
 }
 
-std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) {
+std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) const {
 	std::istringstream input{light_id};
 	std::string item;
 	std::set<unsigned int> light_ids;
@@ -1150,7 +1150,7 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) {
 	return light_ids;
 }
 
-std::string Config::lights_text(const std::set<unsigned int> &light_ids) {
+std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
 	std::string prefix = "Light ";
 	std::string list = "";
 	unsigned int total = 0;
