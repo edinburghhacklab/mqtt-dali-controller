@@ -20,11 +20,13 @@
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
 
+#include <mutex>
+
 class Network;
 
 class UI {
 public:
-	explicit UI(Network &network);
+	UI(std::mutex &file_mutex, Network &network);
 
 	void setup();
 	void loop();
@@ -37,13 +39,17 @@ public:
 private:
 	static constexpr unsigned int LED_GPIO = 38;
 
+	UI(const UI&) = delete;
+	UI& operator= (const UI&) = delete;
+
 	void publish_application();
 	void publish_partitions();
-	void publish_uptime();
+	void publish_stats();
 
 	void ota_result(bool good);
 
 	Network &network_;
+	std::mutex &file_mutex_;
 	Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};
 	uint64_t last_led_us_{0};
 	uint64_t last_publish_us_{0};

@@ -20,6 +20,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <mutex>
 #include <string>
 #include <unordered_set>
 
@@ -31,9 +32,15 @@
 #include "ui.h"
 #include "util.h"
 
+/**
+ * LittleFS is NOT thread-safe. Lock this global mutex when accessing the
+ * filesystem.
+ */
+static std::mutex file_mutex;
+
 static Network network;
-static UI ui{network};
-static Config config{network};
+static UI ui{file_mutex, network};
+static Config config{file_mutex, network};
 static Lights lights{network, config};
 static Dali dali{config, lights};
 static Switches switches{network, config, lights};
@@ -58,7 +65,6 @@ bool testSPIRAM() {
 }
 
 }
-
 
 void setup() {
 	dali.setup();
@@ -88,6 +94,8 @@ void setup() {
 				config.publish_config();
 			}
 		} else if (topic_str == "/reboot") {
+			std::lock_guard lock{file_mutex};
+
 			esp_restart();
 		} else if (topic_str == "/reload") {
 			config.load_config();

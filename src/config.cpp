@@ -91,7 +91,8 @@ static void writeText(cbor::Writer &writer, const std::string &value) {
 	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), length);
 }
 
-Config::Config(Network &network) : network_(network), file_(network) {
+Config::Config(std::mutex &file_mutex, Network &network)
+	: network_(network), file_mutex_(file_mutex), file_(network) {
 }
 
 ConfigFile::ConfigFile(Network &network) : network_(network) {

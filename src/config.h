@@ -98,7 +98,7 @@ private:
 
 class Config {
 public:
-	explicit Config(Network &network);
+	explicit Config(std::mutex &file_mutex, Network &network);
 
 	static bool valid_group_name(const std::string &name);
 	static bool valid_preset_name(const std::string &name);
@@ -147,13 +147,16 @@ private:
 	static constexpr size_t MAX_PRESET_NAME_LEN = 50;
 	static constexpr size_t MAX_SWITCH_NAME_LEN = 50;
 
+	Config(const Config&) = delete;
+	Config& operator= (const Config&) = delete;
+
 	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);
 	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const;
 
 	Network &network_;
 
-	std::mutex file_mutex_;
+	std::mutex &file_mutex_;
 	ConfigFile file_;
 	ConfigData last_saved_;
 	bool saved_{false};

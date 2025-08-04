@@ -22,8 +22,11 @@
 #include <esp_https_ota.h>
 #include <esp_ota_ops.h>
 #include <esp_timer.h>
+#include <FS.h>
+#include <LittleFS.h>
 
 #include <cstring>
+#include <mutex>
 #include <string>
 
 #include "network.h"
@@ -32,7 +35,10 @@
 extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
 extern const uint8_t x509_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
 
-UI::UI(Network &network) : network_(network) {
+static constexpr auto &FS = LittleFS;
+
+UI::UI(std::mutex &file_mutex, Network &network)
+		: network_(network), file_mutex_(file_mutex) {
 }
 
 void UI::startup_complete(bool state) {
@@ -65,7 +71,7 @@ static const char *ota_state_string(esp_ota_img_states_t state) {
 void UI::status_report() {
 	publish_application();
 	publish_partitions();
-	publish_uptime();
+	publish_stats();
 }
 
 void UI::publish_application() {
@@ -123,9 +129,26 @@ void UI::publish_partitions() {
 	}
 }
 
-void UI::publish_uptime() {
-	network_.publish(std::string{MQTT_TOPIC} + "/uptime_us",
-		std::to_string(esp_timer_get_time()));
+void UI::publish_stats() {
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/size", std::to_string(ESP.getHeapSize()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/free", std::to_string(ESP.getFreeHeap()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/min_free_size", std::to_string(ESP.getMinFreeHeap()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/heap/max_block_size", std::to_string(ESP.getMaxAllocHeap()));
+
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/size", std::to_string(ESP.getPsramSize()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/free", std::to_string(ESP.getFreePsram()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/min_free_size", std::to_string(ESP.getMinFreePsram()));
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/psram/max_block_size", std::to_string(ESP.getMaxAllocPsram()));
+
+	{
+		std::lock_guard lock{file_mutex_};
+
+		network_.publish(std::string{MQTT_TOPIC} + "/stats/flash/filesystem/size", std::to_string(FS.totalBytes()));
+		network_.publish(std::string{MQTT_TOPIC} + "/stats/flash/filesystem/used", std::to_string(FS.usedBytes()));
+	}
+
+	network_.publish(std::string{MQTT_TOPIC} + "/stats/uptime_us", std::to_string(esp_timer_get_time()));
+
 	last_publish_us_ = esp_timer_get_time();
 }
 
@@ -145,7 +168,7 @@ void UI::loop() {
 
 	if (startup_complete_ && network_.connected()) {
 		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M) {
-			publish_uptime();
+			publish_stats();
 		}
 	}
 }
