@@ -67,23 +67,24 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 	auto group = config_.get_switch_group(switch_id);
 	auto preset = config_.get_switch_preset(switch_id);
 	DebounceResult debounce = debounce_[switch_id].run();
-	bool active = (preset.empty() || group.empty())
-		? false : debounce_[switch_id].value();
 
-	if (!group.empty()) {
-		lights_.set_power(config_.get_group_addresses(group), active);
-	}
-
-	if (active != state_[switch_id].active) {
-		ESP_LOGE(TAG, "Switch %u turned %s", switch_id, active ? "on" : "off");
-		state_[switch_id].active = active;
+	if (debounce.changed) {
+		state_[switch_id].active = debounce_[switch_id].value();
+		ESP_LOGE(TAG, "Switch %u turned %s", switch_id,
+			state_[switch_id].active ? "on" : "off");
 
 		network_.publish(std::string{MQTT_TOPIC}
 			+ "/switch/" + std::to_string(switch_id) + "/state",
 			state_[switch_id].active ? "1" : "0", true);
 		state_[switch_id].report_us = esp_timer_get_time();
 
-		if (!debounce_[switch_id].first() && !group.empty() && !preset.empty()) {
+		if (!group.empty()) {
+			lights_.set_power(config_.get_group_addresses(group),
+				state_[switch_id].active);
+		}
+
+		if (!debounce_[switch_id].first()
+				&& !group.empty() && !preset.empty()) {
 			std::string name = config_.get_switch_name(switch_id);
 
 			if (name.empty()) {
@@ -91,13 +92,19 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 				name += std::to_string(switch_id);
 			}
 
-			network_.report(TAG, name + " " + (active ? "ON" : "OFF")
+			network_.report(TAG, name + " "
+				+ (debounce_[switch_id].value() ? "ON" : "OFF")
 				+ " (levels reset to " + preset + ")");
 
 			lights_.select_preset(preset, group, true);
 		}
 	} else if (state_[switch_id].report_us
 			&& esp_timer_get_time() - state_[switch_id].report_us >= ONE_M) {
+		if (!group.empty()) {
+			lights_.set_power(config_.get_group_addresses(group),
+				state_[switch_id].active);
+		}
+
 		network_.publish(std::string{MQTT_TOPIC}
 			+ "/switch/" + std::to_string(switch_id) + "/state",
 			state_[switch_id].active ? "1" : "0", true);
