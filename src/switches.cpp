@@ -75,6 +75,7 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 	}
 
 	if (active != state_[switch_id].active) {
+		ESP_LOGE(TAG, "Switch %u turned %s", switch_id, active ? "on" : "off");
 		state_[switch_id].active = active;
 
 		network_.publish(std::string{MQTT_TOPIC}
@@ -82,7 +83,7 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 			state_[switch_id].active ? "1" : "0", true);
 		state_[switch_id].report_us = esp_timer_get_time();
 
-		if (!group.empty() && !preset.empty()) {
+		if (!debounce_[switch_id].first() && !group.empty() && !preset.empty()) {
 			std::string name = config_.get_switch_name(switch_id);
 
 			if (name.empty()) {
