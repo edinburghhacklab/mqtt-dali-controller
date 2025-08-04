@@ -72,7 +72,7 @@ struct ConfigData {
 
 class ConfigFile {
 public:
-	ConfigFile(Network &network);
+	explicit ConfigFile(Network &network);
 
 	bool read_config(ConfigData &data);
 	bool write_config(const ConfigData &data);
@@ -148,7 +148,7 @@ private:
 	static constexpr size_t MAX_SWITCH_NAME_LEN = 50;
 
 	Config(const Config&) = delete;
-	Config& operator= (const Config&) = delete;
+	Config& operator=(const Config&) = delete;
 
 	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);

@@ -22,8 +22,12 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
+#include <algorithm>
+#include <cassert>
+#include <cstring>
 #include <functional>
 #include <string>
+#include <utility>
 
 #include "util.h"
 
@@ -36,15 +40,17 @@ static void json_append_escape(std::string &output, const std::string_view value
 	}
 }
 
-Network::Network() : device_id_(String("mqtt-dali-controller_") + String(ESP.getEfuseMac(), HEX)) {}
+Network::Network()
+		: device_id_(String("mqtt-dali-controller_") + String(ESP.getEfuseMac(), HEX)) {
+}
 
 void Network::report(const char *tag, const std::string &message) {
 	ESP_LOGE(tag, "%s", message.c_str());
 
-	if (connected() && IRC_CHANNEL[0]) {
+	if (IRC_CHANNEL[0]) {
 		std::string payload;
 
-		payload.reserve(512);
+		payload.reserve(Message::BUFFER_SIZE);
 		payload += "{\"to\": \"";
 		json_append_escape(payload, IRC_CHANNEL);
 		payload += "\", \"message\": \"";
@@ -62,7 +68,68 @@ void Network::subscribe(const std::string &topic) {
 }
 
 void Network::publish(const std::string &topic, const std::string &payload, bool retain) {
-	mqtt_.publish(topic.c_str(), payload.c_str(), retain);
+	Message message;
+	bool ok = message.write(topic, payload, retain);
+
+	std::lock_guard lock{messages_mutex_};
+
+	if (!ok) {
+		oversized_messages_++;
+		return;
+	}
+
+	while (message_queue_.size() >= MAX_QUEUED_MESSAGES) {
+		message_queue_.pop_front();
+	}
+
+	message_queue_.emplace_back(std::move(message));
+	maximum_queue_size_ = std::max(maximum_queue_size_, message_queue_.size());
+}
+
+void Network::send_queued_messages() {
+	if (!wifi_up_ || !mqtt_.connected()) {
+		return;
+	}
+
+	std::unique_lock lock{messages_mutex_};
+	size_t count = message_queue_.size() / SEND_QUEUE_DIVISOR + 1;
+	size_t dropped = dropped_messages_;
+	size_t oversized = oversized_messages_;
+
+	while (!message_queue_.empty() && send_messages_.size() < count) {
+		send_messages_.emplace_back(std::move(message_queue_.front()));
+		message_queue_.pop_front();
+	}
+
+	dropped_messages_ = 0;
+	oversized_messages_ = 0;
+	lock.unlock();
+
+	if (dropped) {
+		mqtt_.publish((std::string{MQTT_TOPIC} + "/stats/dropped_messages").c_str(),
+			std::to_string(dropped).c_str());
+	}
+
+	if (oversized) {
+		mqtt_.publish((std::string{MQTT_TOPIC} + "/stats/oversized_messages").c_str(),
+			std::to_string(oversized).c_str());
+	}
+
+	while (!send_messages_.empty()) {
+		const auto &message = send_messages_.front();
+		auto payload = message.payload();
+
+		mqtt_.publish(message.topic(), payload.first, payload.second, message.retain());
+		send_messages_.pop_front();
+	}
+}
+
+size_t Network::maximum_queue_size() {
+	std::lock_guard lock{messages_mutex_};
+	size_t size = maximum_queue_size_;
+
+	maximum_queue_size_ = 0;
+	return size;
 }
 
 void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback) {
@@ -72,7 +139,7 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 	WiFi.mode(WIFI_STA);
 
 	mqtt_.setServer(MQTT_HOSTNAME, MQTT_PORT);
-	mqtt_.setBufferSize(512);
+	mqtt_.setBufferSize(Message::BUFFER_SIZE);
 	mqtt_.setCallback(callback);
 }
 
@@ -119,4 +186,44 @@ void Network::loop(std::function<void()> connected) {
 			}
 		}
 	}
+
+	send_queued_messages();
+}
+
+inline const char* Message::topic() const {
+	if (topic_len_) {
+		return reinterpret_cast<char*>(buffer_.get());
+	} else {
+		return "";
+	}
+}
+
+inline std::pair<const uint8_t *,size_t> Message::payload() const {
+	if (payload_len_) {
+		return {&buffer_.get()[topic_len_], payload_len_};
+	} else {
+		return {nullptr, 0};
+	}
+}
+
+inline bool Message::retain() const {
+	return retain_;
+}
+
+bool Message::write(const std::string &topic, const std::string &payload, bool retain) {
+	if (topic.length() + 1 + payload.length() > BUFFER_SIZE) {
+		topic_len_ = 0;
+		payload_len_ = 0;
+		retain_ = false;
+		return false;
+	}
+
+	buffer_ = MemoryAllocation{reinterpret_cast<uint8_t*>(
+		::heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))};
+	topic_len_ = topic.length() + 1;
+	payload_len_ = payload.length();
+	retain_ = retain;
+	std::memcpy(buffer_.get(), topic.c_str(), topic_len_);
+	std::memcpy(&buffer_.get()[topic_len_], payload.c_str(), payload_len_);
+	return true;
 }

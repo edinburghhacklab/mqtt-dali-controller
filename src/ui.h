@@ -40,7 +40,7 @@ private:
 	static constexpr unsigned int LED_GPIO = 38;
 
 	UI(const UI&) = delete;
-	UI& operator= (const UI&) = delete;
+	UI& operator=(const UI&) = delete;
 
 	void publish_application();
 	void publish_boot();

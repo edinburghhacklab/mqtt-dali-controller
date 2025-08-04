@@ -182,6 +182,8 @@ void setup() {
 
 			lights.set_level(light_id, value);
 		}
+
+		network.send_queued_messages();
 	});
 }
 

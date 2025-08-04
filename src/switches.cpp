@@ -57,12 +57,10 @@ void Switches::loop() {
 				name += std::to_string(i);
 			}
 
-			if (network_.connected()) {
-				network_.publish(std::string{MQTT_TOPIC}
-					+ "/switch/" + std::to_string(i) + "/state",
-					state_[i].value == LOW ? "1" : "0",
-					true);
-			}
+			network_.publish(std::string{MQTT_TOPIC}
+				+ "/switch/" + std::to_string(i) + "/state",
+				state_[i].value == LOW ? "1" : "0",
+				true);
 			state_[i].report_us = esp_timer_get_time();
 
 			network_.report("switch", name + " "

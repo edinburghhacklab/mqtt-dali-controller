@@ -17,9 +17,21 @@
 
 #pragma once
 
+#include <Arduino.h>
+
+#include <memory>
+
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr uint64_t FIVE_M = 5 * ONE_M;
+
+class MemoryDeleter {
+public:
+	void operator()(uint8_t *data) { ::free(data); }
+};
+
+using MemoryAllocation = std::unique_ptr<uint8_t, MemoryDeleter>;
+
 
 #if __has_include("fixed_config.h")
 # include "fixed_config.h"

@@ -21,8 +21,37 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
+#include <array>
+#include <deque>
+#include <mutex>
 #include <functional>
 #include <string>
+
+#include "util.h"
+
+class Message {
+public:
+	Message() = default;
+	Message(Message&&) = default;
+	Message& operator=(Message&&) = default;
+
+	static constexpr size_t BUFFER_SIZE = 512;
+
+	const char* topic() const;
+	std::pair<const uint8_t *,size_t> payload() const;
+	bool retain() const;
+
+	bool write(const std::string &topic, const std::string &payload, bool retain);
+
+private:
+	Message(const Message&) = delete;
+	Message& operator=(const Message&) = delete;
+
+	MemoryAllocation buffer_;
+	size_t topic_len_{0};
+	size_t payload_len_{0};
+	bool retain_{false};
+};
 
 class Network {
 public:
@@ -35,12 +64,24 @@ public:
 	void report(const char *tag, const std::string &message);
 	void subscribe(const std::string &topic);
 	void publish(const std::string &topic, const std::string &payload, bool retain = false);
+	void send_queued_messages();
+	size_t maximum_queue_size();
 
 private:
+	static constexpr size_t MAX_QUEUED_MESSAGES = 1000;
+	static constexpr size_t SEND_QUEUE_DIVISOR = 10;
+
 	String device_id_;
 	WiFiClient client_;
 	PubSubClient mqtt_{client_};
 	uint64_t last_wifi_us_{0};
 	bool wifi_up_{false};
 	uint64_t last_mqtt_us_{0};
+
+	std::mutex messages_mutex_;
+	std::deque<Message> message_queue_;
+	std::deque<Message> send_messages_;
+	size_t dropped_messages_{0};
+	size_t oversized_messages_{0};
+	size_t maximum_queue_size_{0};
 };
