@@ -185,7 +185,7 @@ void Lights::publish_active_presets() {
 		 * count can get very high (groups * presets).
 		 */
 		publish_index_ += REPUBLISH_PER_PERIOD;
-		publish_index_ %= groups.size() + presets.size();
+		publish_index_ %= groups.size() * presets.size();
 		last_publish_us_ = esp_timer_get_time();
 	}
 }
