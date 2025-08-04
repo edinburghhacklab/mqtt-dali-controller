@@ -85,12 +85,19 @@ static void writeText(cbor::Writer &writer, const std::string &value) {
 	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), length);
 }
 
-Config::Config(Network &network) : network_(network) {
+Config::Config(Network &network) : network_(network), file_(network) {
+}
+
+ConfigFile::ConfigFile(Network &network) : network_(network) {
 }
 
 void Config::setup() {
 	FS.begin(true);
 	load_config();
+}
+
+void Config::loop() {
+	save_config();
 }
 
 bool Config::valid_group_name(const std::string &name) {
@@ -167,12 +174,13 @@ std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
 	return {buffer.data(), offset};
 }
 
-std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels, bool filter) {
+std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,
+		const std::bitset<MAX_ADDR+1> *filter) {
 	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
 	size_t offset = 0;
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (!filter || current_.lights[i]) {
+		if (filter == nullptr || filter->test(i)) {
 			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
 			offset += 2;
 		}
@@ -186,16 +194,26 @@ std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &lev
 }
 
 void Config::load_config() {
-	if (!read_config(FILENAME, true)) {
-		read_config(BACKUP_FILENAME, true);
-		save_config();
-	} else {
+	if (file_.read_config(current_)) {
 		last_saved_ = current_;
+		dirty_ = false;
 		saved_ = true;
 	}
 }
 
-bool Config::read_config(const std::string &filename, bool load) {
+bool ConfigFile::read_config(ConfigData &data) {
+	if (!read_config(FILENAME, true)) {
+		if (!read_config(BACKUP_FILENAME, true)) {
+			return false;
+		}
+		write_config(FILENAME);
+	}
+
+	data = data_;
+	return true;
+}
+
+bool ConfigFile::read_config(const std::string &filename, bool load) {
 	ESP_LOGE("config", "Reading config file %s", filename.c_str());
 	const char mode[2] = {'r', '\0'};
 	auto file = FS.open(filename.c_str(), mode);
@@ -216,12 +234,11 @@ bool Config::read_config(const std::string &filename, bool load) {
 
 				if (read_config(reader)) {
 					ESP_LOGE("config", "Loaded config from file %s", filename.c_str());
-					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config",
-						filename + " " + std::to_string(file.size()));
+					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config", filename);
+					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 				} else {
 					ESP_LOGE("config", "Invalid config file %s", filename.c_str());
 				}
-
 			}
 			return true;
 		}
@@ -231,11 +248,11 @@ bool Config::read_config(const std::string &filename, bool load) {
 	}
 }
 
-bool Config::read_config(cbor::Reader &reader) {
+bool ConfigFile::read_config(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 
-	current_ = {};
+	data_ = {};
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
@@ -249,11 +266,11 @@ bool Config::read_config(cbor::Reader &reader) {
 		}
 
 		if (key == "lights") {
-			if (!read_config_lights(reader, current_.lights)) {
+			if (!read_config_lights(reader, data_.lights)) {
 				return false;
 			}
 
-			ESP_LOGE("config", "Lights = %s", addresses_text(current_.lights).c_str());
+			ESP_LOGE("config", "Lights = %s", Config::addresses_text(data_.lights).c_str());
 		} else if (key == "groups") {
 			if (!read_config_groups(reader)) {
 				return false;
@@ -278,7 +295,7 @@ bool Config::read_config(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights) {
+bool ConfigFile::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -303,7 +320,7 @@ bool Config::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &l
 	return true;
 }
 
-bool Config::read_config_groups(cbor::Reader &reader) {
+bool ConfigFile::read_config_groups(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 
@@ -320,7 +337,7 @@ bool Config::read_config_groups(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_group(cbor::Reader &reader) {
+bool ConfigFile::read_config_group(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
@@ -354,11 +371,12 @@ bool Config::read_config_group(cbor::Reader &reader) {
 		}
 	}
 
-	if (valid_group_name(name)) {
-		auto result = current_.groups.emplace(name, std::move(lights));
+	if (Config::valid_group_name(name)) {
+		auto result = data_.groups.emplace(name, std::move(lights));
 
 		if (result.second) {
-			ESP_LOGE("config", "Group %s = %s", name.c_str(), group_addresses_text(name).c_str());
+			ESP_LOGE("config", "Group %s = %s", name.c_str(),
+				Config::addresses_text(result.first->second).c_str());
 		} else {
 			ESP_LOGE("config", "Ignoring duplicate group: %s", name.c_str());
 		}
@@ -369,7 +387,7 @@ bool Config::read_config_group(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_switches(cbor::Reader &reader) {
+bool ConfigFile::read_config_switches(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -395,7 +413,7 @@ bool Config::read_config_switches(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
+bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 	uint64_t length;
 	bool indefinite;
 
@@ -418,7 +436,7 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 			}
 
 			ESP_LOGE("config", "Switch %u name = %s", switch_id, name.c_str());
-			current_.switches[switch_id].name = name;
+			data_.switches[switch_id].name = name;
 		} else if (key == "group") {
 			std::string group;
 
@@ -426,9 +444,9 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 				return false;
 			}
 
-			if (valid_group_name(group)) {
+			if (Config::valid_group_name(group)) {
 				ESP_LOGE("config", "Switch %u group = %s", switch_id, group.c_str());
-				current_.switches[switch_id].group = group;
+				data_.switches[switch_id].group = group;
 			} else {
 				ESP_LOGE("config", "Switch %u invalid group ignored: %s", switch_id, group.c_str());
 			}
@@ -439,9 +457,9 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 				return false;
 			}
 
-			if (valid_preset_name(preset)) {
+			if (Config::valid_preset_name(preset)) {
 				ESP_LOGE("config", "Switch %u preset = %s", switch_id, preset.c_str());
-				current_.switches[switch_id].preset = preset;
+				data_.switches[switch_id].preset = preset;
 			} else {
 				ESP_LOGE("config", "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
 			}
@@ -457,7 +475,7 @@ bool Config::read_config_switch(cbor::Reader &reader, unsigned int switch_id) {
 	return true;
 }
 
-bool Config::read_config_presets(cbor::Reader &reader) {
+bool ConfigFile::read_config_presets(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 
@@ -474,7 +492,7 @@ bool Config::read_config_presets(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_preset(cbor::Reader &reader) {
+bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
@@ -510,11 +528,12 @@ bool Config::read_config_preset(cbor::Reader &reader) {
 		}
 	}
 
-	if (valid_preset_name(name)) {
-		auto result = current_.presets.emplace(name, std::move(levels));
+	if (Config::valid_preset_name(name)) {
+		auto result = data_.presets.emplace(name, std::move(levels));
 
 		if (result.second) {
-			ESP_LOGE("config", "Preset %s = %s", name.c_str(), preset_levels_text(result.first->second, false).c_str());
+			ESP_LOGE("config", "Preset %s = %s", name.c_str(),
+				Config::preset_levels_text(result.first->second, nullptr).c_str());
 		} else {
 			ESP_LOGE("config", "Ignoring duplicate preset: %s", name.c_str());
 		}
@@ -525,7 +544,7 @@ bool Config::read_config_preset(cbor::Reader &reader) {
 	return true;
 }
 
-bool Config::read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels) {
+bool ConfigFile::read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -552,22 +571,34 @@ bool Config::read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,
 	return true;
 }
 
+void Config::dirty_config() {
+	dirty_ = true;
+}
+
 void Config::save_config() {
-	if (saved_ && current_ == last_saved_) {
+	if (saved_ && !dirty_) {
 		return;
 	}
 
-	if (write_config(FILENAME)) {
-		if (read_config(FILENAME, false)) {
-			if (write_config(BACKUP_FILENAME)) {
-				last_saved_ = current_;
-				saved_ = true;
-			}
-		}
+	if (current_ == last_saved_) {
+		dirty_ = false;
+		return;
 	}
+
+	last_saved_ = current_;
+	file_.write_config(last_saved_);
+
+	/* Don't retry until the config changes again */
+	dirty_ = false;
+	saved_ = true;
 }
 
-bool Config::write_config(const std::string &filename) {
+bool ConfigFile::write_config(const ConfigData &data) {
+	data_ = data;
+	return write_config(FILENAME) && read_config(FILENAME, false) && write_config(BACKUP_FILENAME);
+}
+
+bool ConfigFile::write_config(const std::string &filename) {
 	ESP_LOGE("config", "Writing config file %s", filename.c_str());
 	{
 		const char mode[2] = {'w', '\0'};
@@ -593,8 +624,8 @@ bool Config::write_config(const std::string &filename) {
 		auto file = FS.open(filename.c_str(), mode);
 		if (file) {
 			ESP_LOGE("config", "Saved config to file %s", filename.c_str());
-			network_.publish(std::string{MQTT_TOPIC} + "/saved_config",
-				filename + " " + std::to_string(file.size()));
+			network_.publish(std::string{MQTT_TOPIC} + "/saved_config", filename);
+			network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 			return true;
 		} else {
 			network_.report("config", std::string{"Unable to open config file "} + filename + " for reading");
@@ -603,18 +634,18 @@ bool Config::write_config(const std::string &filename) {
 	}
 }
 
-void Config::write_config(cbor::Writer &writer) {
+void ConfigFile::write_config(cbor::Writer &writer) {
 	writer.beginMap(4);
 
 	writeText(writer, "lights");
 	writer.beginArray(MAX_ADDR+1);
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		writer.writeBoolean(current_.lights[i]);
+		writer.writeBoolean(data_.lights[i]);
 	}
 
 	writeText(writer, "groups");
-	writer.beginArray(current_.groups.size());
-	for (const auto &group : current_.groups) {
+	writer.beginArray(data_.groups.size());
+	for (const auto &group : data_.groups) {
 		writer.beginMap(2);
 
 		writeText(writer, "name");
@@ -633,18 +664,18 @@ void Config::write_config(cbor::Writer &writer) {
 		writer.beginMap(3);
 
 		writeText(writer, "name");
-		writeText(writer, current_.switches[i].name);
+		writeText(writer, data_.switches[i].name);
 
 		writeText(writer, "group");
-		writeText(writer, current_.switches[i].group);
+		writeText(writer, data_.switches[i].group);
 
 		writeText(writer, "preset");
-		writeText(writer, current_.switches[i].preset);
+		writeText(writer, data_.switches[i].preset);
 	}
 
 	writeText(writer, "presets");
-	writer.beginArray(current_.presets.size());
-	for (const auto &preset : current_.presets) {
+	writer.beginArray(data_.presets.size());
+	for (const auto &preset : data_.presets) {
 		writer.beginMap(2);
 
 		writeText(writer, "name");
@@ -682,7 +713,7 @@ void Config::publish_config() {
 
 void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) {
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels",
-		preset_levels_text(levels, false), true);
+		preset_levels_text(levels, nullptr), true);
 }
 
 std::bitset<MAX_ADDR+1> Config::get_addresses() {
@@ -790,7 +821,7 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 		}
 	}
 
-	save_config();
+	dirty_config();
 }
 
 void Config::delete_group(const std::string &name) {
@@ -810,7 +841,7 @@ void Config::delete_group(const std::string &name) {
 		network_.publish(std::string{MQTT_TOPIC} + "/active/" + name + "/" + preset, "", true);
 	}
 
-	save_config();
+	dirty_config();
 }
 
 std::string Config::get_switch_name(unsigned int switch_id) {
@@ -832,7 +863,7 @@ void Config::set_switch_name(unsigned int switch_id, const std::string &name) {
 				+ " -> " + quoted_string(new_name));
 
 			current_.switches[switch_id].name = new_name;
-			save_config();
+			dirty_config();
 		}
 	}
 }
@@ -858,7 +889,7 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 				+ " -> " + quoted_string(group));
 
 			current_.switches[switch_id].group = group;
-			save_config();
+			dirty_config();
 		}
 	}
 }
@@ -884,7 +915,7 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 				+ " -> " + quoted_string(preset));
 
 			current_.switches[switch_id].preset = preset;
-			save_config();
+			dirty_config();
 		}
 	}
 }
@@ -942,7 +973,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		it = current_.presets.emplace(name, std::move(levels)).first;
 	}
 
-	auto before = preset_levels_text(it->second, true);
+	auto before = preset_levels_text(it->second, &current_.lights);
 
 	for (unsigned int light_id : light_ids) {
 		if (current_.lights[light_id]) {
@@ -956,7 +987,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 		}
 	}
 
-	auto after = preset_levels_text(it->second, true);
+	auto after = preset_levels_text(it->second, &current_.lights);
 
 	if (before != after) {
 		publish_preset(it->first, it->second);
@@ -970,7 +1001,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 
-	save_config();
+	dirty_config();
 }
 
 void Config::set_preset(const std::string &name, std::string levels) {
@@ -991,7 +1022,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 		it = current_.presets.emplace(name, std::move(empty_levels)).first;
 	}
 
-	auto before = preset_levels_text(it->second, true);
+	auto before = preset_levels_text(it->second, &current_.lights);
 	unsigned int light_id = 0;
 
 	it->second.fill(-1);
@@ -1020,7 +1051,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 		it->second[light_id++] = (level == 0xFF ? -1 : level);
 	}
 
-	auto after = preset_levels_text(it->second, true);
+	auto after = preset_levels_text(it->second, &current_.lights);
 
 	if (before != after) {
 		publish_preset(it->first, it->second);
@@ -1028,7 +1059,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 
-	save_config();
+	dirty_config();
 }
 
 void Config::delete_preset(const std::string &name) {
@@ -1039,7 +1070,7 @@ void Config::delete_preset(const std::string &name) {
 	}
 
 	network_.report("presets", std::string{"Preset "} + name + ": "
-		+ quoted_string(preset_levels_text(it->second, true))
+		+ quoted_string(preset_levels_text(it->second, &current_.lights))
 		+ " (deleted)");
 
 	current_.presets.erase(it);

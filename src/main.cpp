@@ -208,4 +208,5 @@ void loop() {
 		network.publish("meta/mqtt-agents/announce", network.device_id());
 		network.publish(topic + "/startup_complete", "");
 	});
+	config.loop();
 }

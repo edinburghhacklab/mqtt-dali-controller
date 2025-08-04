@@ -69,15 +69,46 @@ struct ConfigData {
 	inline bool operator!=(const ConfigData &other) const { return !(*this == other); }
 };
 
+class ConfigFile {
+public:
+	ConfigFile(Network &network);
+
+	bool read_config(ConfigData &data);
+	bool write_config(const ConfigData &data);
+
+private:
+	bool read_config(const std::string &filename, bool load);
+	bool read_config(cbor::Reader &reader);
+	bool read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights);
+	bool read_config_groups(cbor::Reader &reader);
+	bool read_config_group(cbor::Reader &reader);
+	bool read_config_switches(cbor::Reader &reader);
+	bool read_config_switch(cbor::Reader &reader, unsigned int switch_id);
+	bool read_config_presets(cbor::Reader &reader);
+	bool read_config_preset(cbor::Reader &reader);
+	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
+
+	void write_config(cbor::Writer &writer);
+	bool write_config(const std::string &filename);
+
+	Network &network_;
+	ConfigData data_;
+};
+
 class Config {
 public:
 	explicit Config(Network &network);
 
 	static bool valid_group_name(const std::string &name);
 	static bool valid_preset_name(const std::string &name);
+	static std::string addresses_text(const std::bitset<MAX_ADDR+1> &addresses);
+	static std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,
+		const std::bitset<MAX_ADDR+1> *filter);
 
 	void setup();
+	void loop();
 	void load_config();
+	void save_config();
 	void publish_config();
 
 	std::bitset<MAX_ADDR+1> get_addresses();
@@ -106,7 +137,6 @@ public:
 	void delete_preset(const std::string &name);
 
 	std::set<unsigned int> parse_light_ids(const std::string &light_id);
-	std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels, bool filter);
 	std::string lights_text(const std::set<unsigned int> &light_ids);
 
 private:
@@ -116,29 +146,14 @@ private:
 	static constexpr size_t MAX_PRESET_NAME_LEN = 50;
 	static constexpr size_t MAX_SWITCH_NAME_LEN = 50;
 
-	static std::string addresses_text(const std::bitset<MAX_ADDR+1> &addresses);
-
+	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);
-
-	bool read_config(const std::string &filename, bool load);
-	bool read_config(cbor::Reader &reader);
-	bool read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights);
-	bool read_config_groups(cbor::Reader &reader);
-	bool read_config_group(cbor::Reader &reader);
-	bool read_config_switches(cbor::Reader &reader);
-	bool read_config_switch(cbor::Reader &reader, unsigned int switch_id);
-	bool read_config_presets(cbor::Reader &reader);
-	bool read_config_preset(cbor::Reader &reader);
-	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
-
-	void save_config();
-	void write_config(cbor::Writer &writer);
-	bool write_config(const std::string &filename);
-
 	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels);
 
 	Network &network_;
+	ConfigFile file_;
 	ConfigData current_;
 	ConfigData last_saved_;
+	bool dirty_{false};
 	bool saved_{false};
 };
