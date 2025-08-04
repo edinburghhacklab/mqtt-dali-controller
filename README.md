@@ -31,6 +31,20 @@ values:
 dali/addresses [<00-3F>...] (retain)
 ```
 
+Light levels will be output when they change and every 60 seconds:
+```
+dali/levels <000-7FE>... (retain)
+```
+The level for all addresses are output, with a value of `FF` if the level hasn't
+been set yet.
+
+The lower 4 bits indicate the power status of the light:
+* `1` = Present (in configured list of addresses)
+* `2` = Power on
+* `4` = Power off
+
+The power bits will be absent until a switch has been configured for the lights.
+
 ### Groups
 
 Up to 10 groups of lights can be configured and they can overlap. The built-in

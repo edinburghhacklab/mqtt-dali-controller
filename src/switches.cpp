@@ -47,6 +47,9 @@ void Switches::loop() {
 		int switch_value = (preset.empty() || group.empty())
 			? LOW : digitalRead(SWITCH_GPIO[i]);
 
+		lights_.set_power(config_.get_group_addresses(group),
+			switch_value == LOW);
+
 		if (switch_value != state_[i].value) {
 			state_[i].value = switch_value;
 
@@ -70,9 +73,10 @@ void Switches::loop() {
 			lights_.select_preset(preset, group, true);
 		} else if (state_[i].report_us
 				&& esp_timer_get_time() - state_[i].report_us >= ONE_M) {
-			network_.publish(std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i) + "/state",
-					state_[i].value == LOW ? "1" : "0",
-					true);
+			network_.publish(std::string{MQTT_TOPIC}
+				+ "/switch/" + std::to_string(i) + "/state",
+				state_[i].value == LOW ? "1" : "0",
+				true);
 			state_[i].report_us = esp_timer_get_time();
 		}
 	}

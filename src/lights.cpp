@@ -21,6 +21,7 @@
 #include <esp_timer.h>
 
 #include <array>
+#include <bitset>
 #include <mutex>
 #include <string>
 #include <unordered_set>
@@ -33,6 +34,7 @@
 
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
+	levels_.fill(0xFF);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
@@ -40,6 +42,7 @@ Lights::Lights(Network &network, const Config &config)
 
 void Lights::loop() {
 	if (startup_complete_ && network_.connected()) {
+		publish_levels(false);
 		publish_active_presets();
 	}
 }
@@ -64,7 +67,7 @@ void Lights::address_config_changed(const std::string &group) {
 }
 
 std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
-	std::lock_guard lock{levels_mutex_};
+	std::lock_guard lock{lights_mutex_};
 
 	return levels_;
 }
@@ -73,7 +76,7 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 	const auto addresses = config_.get_addresses();
 	const auto light_ids = config_.parse_light_ids(lights);
 	std::lock_guard publish_lock{publish_mutex_};
-	std::lock_guard levels_lock{levels_mutex_};
+	std::lock_guard lights_lock{lights_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
 	bool changed = false;
 
@@ -93,7 +96,6 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 				}
 			}
 		} else {
-			levels_[i] = 0;
 			if (!active_presets_[i].empty()) {
 				republish_presets_.insert(active_presets_[i]);
 				active_presets_[i] = "";
@@ -101,8 +103,12 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 		}
 	}
 
-	if (changed && !internal) {
-		network_.report("lights", config_.lights_text(light_ids) + " = " + name);
+	if (changed) {
+		if (!internal) {
+			network_.report("lights", config_.lights_text(light_ids) + " = " + name);
+		}
+
+		publish_levels(true);
 	}
 }
 
@@ -114,7 +120,7 @@ void Lights::set_level(const std::string &lights, long level) {
 	const auto addresses = config_.get_addresses();
 	const auto light_ids = config_.parse_light_ids(lights);
 	std::lock_guard publish_lock{publish_mutex_};
-	std::lock_guard levels_lock{levels_mutex_};
+	std::lock_guard lights_lock{lights_mutex_};
 	bool changed = false;
 
 	for (int light_id : light_ids) {
@@ -134,11 +140,24 @@ void Lights::set_level(const std::string &lights, long level) {
 	}
 
 	network_.report("lights", config_.lights_text(light_ids) + " = " + std::to_string(level));
+	publish_levels(true);
+}
+
+void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
+	std::lock_guard lock{lights_mutex_};
+
+	power_known_ |= lights;
+
+	if (on) {
+		power_on_ |= lights;
+	} else {
+		power_on_ &= ~lights;
+	}
 }
 
 void Lights::publish_active_presets() {
 	std::lock_guard publish_lock{publish_mutex_};
-	bool force = (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= ONE_M);
+	bool force = (!last_publish_active_us_ || esp_timer_get_time() - last_publish_active_us_ >= ONE_M);
 
 	if (!force && republish_groups_.empty() && republish_presets_.empty()) {
 		return;
@@ -186,6 +205,35 @@ void Lights::publish_active_presets() {
 		 */
 		publish_index_ += REPUBLISH_PER_PERIOD;
 		publish_index_ %= groups.size() * presets.size();
-		last_publish_us_ = esp_timer_get_time();
+		last_publish_active_us_ = esp_timer_get_time();
 	}
+}
+
+void Lights::publish_levels(bool force) {
+	if (!force && last_publish_levels_us_ && esp_timer_get_time() - last_publish_active_us_ < ONE_M) {
+		return;
+	}
+
+	std::lock_guard publish_lock{lights_mutex_};
+	const auto addresses = config_.get_addresses();
+	std::vector<char> buffer(3 * (MAX_ADDR + 1) + 1);
+	size_t offset = 0;
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		unsigned int value = (levels_[i] & 0xFF);
+
+		if (addresses[i]) {
+			value |= LEVEL_PRESENT;
+		}
+
+		if (power_known_[i]) {
+			value |= power_on_[i] ? LEVEL_POWER_ON : LEVEL_POWER_OFF;
+		}
+
+		snprintf(&buffer[offset], 4, "%03X", value);
+		offset += 3;
+	}
+
+	network_.publish(std::string{MQTT_TOPIC} + "/levels", {buffer.data(), offset}, true);
+	last_publish_levels_us_ = esp_timer_get_time();
 }
