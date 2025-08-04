@@ -38,7 +38,6 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "dali.h"
@@ -753,18 +752,23 @@ std::bitset<MAX_ADDR+1> Config::get_addresses() const {
 	return get_group_addresses(BUILTIN_GROUP_ALL);
 }
 
-std::unordered_set<std::string> Config::group_names() const {
-	std::unordered_set<std::string> all(MAX_GROUPS + 1);
+std::vector<std::string> Config::group_names() const {
+	std::vector<std::string> groups;
 
-	all.insert(BUILTIN_GROUP_ALL);
+	groups.reserve(MAX_GROUPS + 1);
+	groups.emplace_back(BUILTIN_GROUP_ALL);
 
-	std::lock_guard lock{data_mutex_};
+	std::unique_lock lock{data_mutex_};
 
-	for (const auto &groups : current_.groups) {
-		all.insert(groups.first);
+	for (const auto &group : current_.groups) {
+		groups.emplace_back(group.first);
 	}
 
-	return all;
+	lock.unlock();
+
+	std::sort(groups.begin(), groups.end());
+
+	return groups;
 }
 
 std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) const {
@@ -975,19 +979,24 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 	}
 }
 
-std::unordered_set<std::string> Config::preset_names() const {
-	std::unordered_set<std::string> all(MAX_PRESETS + 2);
+std::vector<std::string> Config::preset_names() const {
+	std::vector<std::string> presets;
 
-	all.insert(BUILTIN_PRESET_OFF);
-	all.insert(RESERVED_PRESET_CUSTOM);
+	presets.reserve(MAX_PRESETS + 2);
+	presets.emplace_back(BUILTIN_PRESET_OFF);
+	presets.emplace_back(RESERVED_PRESET_CUSTOM);
 
-	std::lock_guard lock{data_mutex_};
+	std::unique_lock lock{data_mutex_};
 
 	for (const auto &preset : current_.presets) {
-		all.insert(preset.first);
+		presets.emplace_back(preset.first);
 	}
 
-	return all;
+	lock.unlock();
+
+	std::sort(presets.begin(), presets.end());
+
+	return presets;
 }
 
 bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const {

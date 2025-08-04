@@ -28,7 +28,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
+#include <vector>
 
 #include "dali.h"
 #include "switches.h"
@@ -116,7 +116,7 @@ public:
 	void set_addresses(const std::string &addresses);
 	std::string addresses_text() const;
 
-	std::unordered_set<std::string> group_names() const;
+	std::vector<std::string> group_names() const;
 	std::bitset<MAX_ADDR+1> get_group_addresses(const std::string &name) const;
 	void set_group_addresses(const std::string &name, const std::string &addresses);
 	std::string group_addresses_text(const std::string &name) const;
@@ -131,7 +131,7 @@ public:
 	std::string get_switch_preset(unsigned int switch_id) const;
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
-	std::unordered_set<std::string> preset_names() const;
+	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;
 	void set_preset(const std::string &name, const std::string &lights, long level);
 	void set_preset(const std::string &name, std::string levels);

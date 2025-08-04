@@ -52,8 +52,9 @@ void Lights::startup_complete(bool state) {
 
 void Lights::address_config_changed() {
 	std::lock_guard lock{publish_mutex_};
+	auto groups = config_.group_names();
 
-	republish_groups_ = config_.group_names();
+	republish_groups_.insert(groups.begin(), groups.end());
 }
 
 void Lights::address_config_changed(const std::string &group) {
