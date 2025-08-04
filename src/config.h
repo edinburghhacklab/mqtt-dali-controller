@@ -137,7 +137,7 @@ public:
 	void set_preset(const std::string &name, std::string levels);
 	void delete_preset(const std::string &name);
 
-	std::set<unsigned int> parse_light_ids(const std::string &light_id) const;
+	std::set<unsigned int> parse_light_ids(const std::string &light_id, bool &idle_only) const;
 	std::string lights_text(const std::set<unsigned int> &light_ids) const;
 
 private:

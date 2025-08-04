@@ -72,13 +72,22 @@ std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
 	return levels_;
 }
 
+bool Lights::is_idle() {
+	return esp_timer_get_time() - last_activity_us_ >= IDLE_US;
+}
+
 void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {
 	const auto addresses = config_.get_addresses();
-	const auto light_ids = config_.parse_light_ids(lights);
+	bool idle_only;
+	const auto light_ids = config_.parse_light_ids(lights, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
 	bool changed = false;
+
+	if (idle_only && !is_idle()) {
+		return;
+	}
 
 	if (!config_.get_preset(name, preset_levels)) {
 		return;
@@ -120,10 +129,15 @@ void Lights::set_level(const std::string &lights, long level) {
 	}
 
 	const auto addresses = config_.get_addresses();
-	const auto light_ids = config_.parse_light_ids(lights);
+	bool idle_only;
+	const auto light_ids = config_.parse_light_ids(lights, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	bool changed = false;
+
+	if (idle_only && !is_idle()) {
+		return;
+	}
 
 	for (int light_id : light_ids) {
 		if (!addresses[light_id]) {

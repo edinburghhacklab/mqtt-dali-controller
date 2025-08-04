@@ -48,8 +48,9 @@
 
 static constexpr auto &FS = LittleFS;
 
-static const std::string RESERVED_GROUP_LEVELS = "levels";
+static const std::string BUILTIN_GROUP_IDLE = "idle";
 static const std::string RESERVED_GROUP_DELETE = "delete";
+static const std::string RESERVED_GROUP_LEVELS = "levels";
 static constexpr size_t MAX_TEXT_LEN = 256;
 static const std::string FILENAME = "/config.cbor";
 static const std::string BACKUP_FILENAME = "/config.cbor~";
@@ -108,8 +109,9 @@ void Config::loop() {
 
 bool Config::valid_group_name(const std::string &name) {
 	if (name == BUILTIN_GROUP_ALL
-			|| name == RESERVED_GROUP_LEVELS
+			|| name == BUILTIN_GROUP_IDLE
 			|| name == RESERVED_GROUP_DELETE
+			|| name == RESERVED_GROUP_LEVELS
 			|| name.empty()
 			|| name.length() > MAX_GROUP_NAME_LEN) {
 		return false;
@@ -1027,7 +1029,8 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 	}
 
 	std::lock_guard lock{data_mutex_};
-	auto light_ids = parse_light_ids(lights);
+	bool idle_only;
+	auto light_ids = parse_light_ids(lights, idle_only);
 	auto it = current_.presets.find(name);
 
 	if (it == current_.presets.cend()) {
@@ -1148,11 +1151,14 @@ void Config::delete_preset(const std::string &name) {
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
 }
 
-std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) const {
+std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
+		bool &idle_only) const {
 	std::lock_guard lock{data_mutex_};
 	std::istringstream input{light_id};
 	std::string item;
 	std::set<unsigned int> light_ids;
+
+	idle_only = false;
 
 	while (std::getline(input, item, ',')) {
 		auto group = current_.groups.find(item);
@@ -1162,6 +1168,9 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) cons
 		if (item == BUILTIN_GROUP_ALL) {
 			begin = 0;
 			end = MAX_ADDR;
+		} else if (item == BUILTIN_GROUP_IDLE) {
+			idle_only = true;
+			continue;
 		} else if (group != current_.groups.end()) {
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (group->second[i]) {

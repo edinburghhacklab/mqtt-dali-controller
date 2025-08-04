@@ -61,7 +61,7 @@ Remove a group by setting an empty value:
 dali/group/<name> (null) (retain)
 ```
 
-The reserved group names `all`, `delete` and `levels` can't be configured.
+The reserved group names `all`, `delete`, `idle` and `levels` can't be configured.
 
 The maximum length of a group name is 50 characters and they can only contain
 lowercase alphanumeric characters as well as `.`, `-` and `_`. Group names must
@@ -129,6 +129,17 @@ Select preset for individual lights or groups:
 
 ```
 dali/preset/<name> <<0-63>[-<0-63>]|group>
+```
+
+The built-in group `idle` changes the behaviour so that it only has an effect
+when idle for at least 10 seconds. This can be used to avoid a race condition
+when deciding to automatically turn off the lights at the same time someone is
+about to switch them on.
+
+Select preset `off` for all lights, but only when idle for at least 10 seconds:
+
+```
+dali/preset/off all,idle
 ```
 
 ### Miscellaneous

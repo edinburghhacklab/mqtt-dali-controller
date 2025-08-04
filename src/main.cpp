@@ -203,6 +203,7 @@ void loop() {
 		network.subscribe(topic + "/reboot");
 		network.subscribe(topic + "/reload");
 		network.subscribe(topic + "/status");
+		network.subscribe(topic + "/idle/");
 		network.subscribe(topic + "/ota/+");
 		network.subscribe(topic + "/addresses");
 		network.subscribe(topic + "/group/+");

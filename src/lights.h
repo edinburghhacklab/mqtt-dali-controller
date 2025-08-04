@@ -25,6 +25,7 @@
 #include <unordered_set>
 
 #include "dali.h"
+#include "util.h"
 
 static const std::string RESERVED_PRESET_CUSTOM = "custom";
 static const std::string RESERVED_PRESET_UNKNOWN = "unknown";
@@ -48,12 +49,14 @@ public:
 
 private:
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
+	static constexpr uint64_t IDLE_US = 10 * ONE_S;
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
 
 	void publish_active_presets();
 	void publish_levels(bool force);
+	bool is_idle();
 
 	Network &network_;
 	const Config &config_;
