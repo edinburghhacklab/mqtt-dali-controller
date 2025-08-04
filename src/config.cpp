@@ -1215,10 +1215,12 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id) cons
 
 std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
 	std::lock_guard lock{data_mutex_};
-	std::string prefix = "Light ";
+	std::vector<std::string> light_texts;
 	std::string list = "";
 	unsigned int total = 0;
 	unsigned int found = 0;
+	unsigned int begin = INT_MAX;
+	unsigned int previous = INT_MAX;
 
 	for (unsigned int i = 0; i < MAX_ADDR; i++) {
 		if (current_.lights[i]) {
@@ -1226,28 +1228,38 @@ std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
 		}
 	}
 
-	for (int light_id : light_ids) {
+	for (unsigned int light_id : light_ids) {
 		if (!current_.lights[light_id]) {
 			continue;
 		}
 
-		if (!list.empty()) {
-			prefix = "Lights ";
-			list += ",";
+		if (previous != INT_MAX && previous == light_id - 1) {
+			light_texts.pop_back();
+			light_texts.push_back(std::to_string(begin) + "-" + std::to_string(light_id));
+		} else {
+			begin = light_id;
+			light_texts.emplace_back(std::move(std::to_string(light_id)));
 		}
 
-		list += std::to_string(light_id);
+		previous = light_id;
 		found++;
 	}
 
-	if (total == found) {
-		prefix = "All";
-		list = "";
+	for (const auto &light_text : light_texts) {
+		if (!list.empty()) {
+			list += ",";
+		}
+
+		list += light_text;
 	}
 
 	if (found == 0) {
 		return "None";
+	} else if (total == found) {
+		return "All";
+	} else if (found == 1) {
+		return std::string{"Light "} + list;
+	} else {
+		return std::string{"Lights "} + list;
 	}
-
-	return prefix + list;
 }
