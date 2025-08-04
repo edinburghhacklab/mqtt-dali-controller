@@ -154,11 +154,13 @@ void Lights::publish_active_presets() {
 		for (const auto &preset : presets) {
 			bool republish_preset = republish_presets_.find(preset) != republish_presets_.end();
 
-			if (republish_group || republish_preset || (force && publish_index_ == i)) {
+			if (republish_group || republish_preset
+					|| (force && i >= publish_index_
+						&& i < publish_index_ + REPUBLISH_PER_PERIOD)) {
 				bool is_active = false;
 
-				for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-					if (lights[i] && active_presets_[i] == preset) {
+				for (unsigned int j = 0; j <= MAX_ADDR; j++) {
+					if (lights[j] && active_presets_[j] == preset) {
 						is_active = true;
 						break;
 					}
@@ -168,9 +170,9 @@ void Lights::publish_active_presets() {
 					+ group + "/" + preset,
 					is_active ? "1" : "0", true);
 			}
-		}
 
-		i++;
+			i++;
+		}
 	}
 
 	republish_groups_.clear();
@@ -181,8 +183,8 @@ void Lights::publish_active_presets() {
 		 * Republish only one of the groups every time because the total message
 		 * count can get very high (groups * presets).
 		 */
-		publish_index_++;
-		publish_index_ %= groups.size();
+		publish_index_ += REPUBLISH_PER_PERIOD;
+		publish_index_ %= groups.size() + presets.size();
 		last_publish_us_ = esp_timer_get_time();
 	}
 }

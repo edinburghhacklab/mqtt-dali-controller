@@ -45,6 +45,8 @@ public:
 	void set_level(const std::string &lights, long level);
 
 private:
+	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
+
 	void publish_active_presets();
 
 	Network &network_;
