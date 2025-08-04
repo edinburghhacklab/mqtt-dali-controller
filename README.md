@@ -145,6 +145,12 @@ Reboot:
 dali/reboot (null)
 ```
 
+Idle time (reported every 60 seconds after a change in light levels):
+
+```
+dali/idle_us <microseconds>
+```
+
 ### OTA Updates
 
 Query status:

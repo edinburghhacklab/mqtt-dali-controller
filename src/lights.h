@@ -63,6 +63,7 @@ private:
 	std::bitset<MAX_ADDR+1> power_on_;
 	std::bitset<MAX_ADDR+1> power_known_;
 	uint64_t last_publish_levels_us_{0};
+	uint64_t last_activity_us_{0};
 
 	std::mutex publish_mutex_;
 	bool startup_complete_{false};

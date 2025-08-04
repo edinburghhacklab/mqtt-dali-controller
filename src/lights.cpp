@@ -103,6 +103,8 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 		}
 	}
 
+	last_activity_us_ = esp_timer_get_time();
+
 	if (changed) {
 		if (!internal) {
 			network_.report("lights", config_.lights_text(light_ids) + " = " + name);
@@ -134,6 +136,8 @@ void Lights::set_level(const std::string &lights, long level) {
 		republish_presets_.insert(active_presets_[light_id]);
 		changed = true;
 	}
+
+	last_activity_us_ = esp_timer_get_time();
 
 	if (!changed) {
 		return;
@@ -210,7 +214,8 @@ void Lights::publish_active_presets() {
 }
 
 void Lights::publish_levels(bool force) {
-	if (!force && last_publish_levels_us_ && esp_timer_get_time() - last_publish_active_us_ < ONE_M) {
+	if (!force && last_publish_levels_us_
+			&& esp_timer_get_time() - last_publish_active_us_ < ONE_M) {
 		return;
 	}
 
@@ -234,6 +239,11 @@ void Lights::publish_levels(bool force) {
 		offset += 3;
 	}
 
-	network_.publish(std::string{MQTT_TOPIC} + "/levels", {buffer.data(), offset}, true);
+	network_.publish(std::string{MQTT_TOPIC} + "/levels",
+		{buffer.data(), offset}, true);
+	if (!force) {
+		network_.publish(std::string{MQTT_TOPIC} + "/idle_us",
+			std::to_string(esp_timer_get_time() - last_activity_us_));
+	}
 	last_publish_levels_us_ = esp_timer_get_time();
 }
