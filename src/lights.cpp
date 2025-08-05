@@ -135,11 +135,12 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
 	bool changed = false;
 
-	if (idle_only && !is_idle()) {
+	if (!config_.get_preset(name, preset_levels)) {
 		return;
 	}
 
-	if (!config_.get_preset(name, preset_levels)) {
+	if (!internal && idle_only && !is_idle()) {
+		network_.report(TAG, config_.lights_text(light_ids) + " = " + name + " (ignored - not idle)");
 		return;
 	}
 
@@ -168,7 +169,7 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 		save_rtc_state();
 
 		if (!internal) {
-			network_.report(TAG, config_.lights_text(light_ids) + " = " + name);
+			network_.report(TAG, config_.lights_text(light_ids) + " = " + name + (idle_only ? " (idle only)" : ""));
 		}
 
 		publish_levels(true);
