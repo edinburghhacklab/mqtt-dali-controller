@@ -82,7 +82,7 @@ and then every 60 seconds.
 
 ### Presets
 
-Up to 10 presets can be configured, setting an empty value to skip that light:
+Up to 20 presets can be configured, setting an empty value to skip that light:
 
 ```
 dali/preset/<name>/<<0-63>[-<0-63>]|group>,... <0-254>
