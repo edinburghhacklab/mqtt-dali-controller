@@ -1163,7 +1163,6 @@ void Config::set_ordered_presets(const std::string &names) {
 	auto after = vector_text(current_.ordered);
 
 	if (before != after) {
-		network_.publish(std::string{MQTT_TOPIC} + "/preset/order", after, true);
 		network_.report(TAG, std::string{"Preset order: "}
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
@@ -1222,7 +1221,6 @@ void Config::set_preset(const std::string &name, std::string levels) {
 	auto after = preset_levels_text(it->second, &current_.lights);
 
 	if (before != after) {
-		publish_preset(it->first, it->second);
 		network_.report(TAG, std::string{"Preset "} + name + ": "
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
