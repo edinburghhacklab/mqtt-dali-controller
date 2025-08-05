@@ -118,12 +118,12 @@ bool Config::valid_group_name(const std::string &name) {
 		return false;
 	}
 
+	if (!(name[0] >= 'a' && name[0] <= 'z')) {
+		return false;
+	}
+
 	for (size_t i = 0; i < name.length(); i++) {
 		if (name[i] >= '0' && name[i] <= '9') {
-			if (i == 0) {
-				return false;
-			}
-
 			continue;
 		} else if (name[i] >= 'a' && name[i] <= 'z') {
 			continue;
@@ -143,6 +143,10 @@ bool Config::valid_preset_name(const std::string &name) {
 			|| name == RESERVED_PRESET_UNKNOWN
 			|| name.empty()
 			|| name.length() > MAX_PRESET_NAME_LEN) {
+		return false;
+	}
+
+	if (!(name[0] >= 'a' && name[0] <= 'z')) {
 		return false;
 	}
 

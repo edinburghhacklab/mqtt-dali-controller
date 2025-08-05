@@ -65,7 +65,7 @@ The reserved group names `all`, `delete`, `idle` and `levels` can't be configure
 
 The maximum length of a group name is 50 characters and they can only contain
 lowercase alphanumeric characters as well as `.`, `-` and `_`. Group names must
-not start with a number.
+start with a letter.
 
 ### Switches
 
@@ -92,7 +92,8 @@ dali/preset/<name>/<<0-63>[-<0-63>]|group>,... (null)
 The reserved preset names `off`, `custom` and `unknown` can't be configured.
 
 The maximum length of a preset name is 50 characters and they can only contain
-lowercase alphanumeric characters as well as `.`, `-` and `_`.
+lowercase alphanumeric characters as well as `.`, `-` and `_`. Preset names must
+start with a letter.
 
 Presets will be republished with light level values for all addresses in order:
 ```
