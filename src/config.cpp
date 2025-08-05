@@ -1241,8 +1241,13 @@ void Config::delete_preset(const std::string &name) {
 		+ " (deleted)");
 
 	current_.presets.erase(it);
-	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/active", "", true);
+
 	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
+	for (const auto &group : group_names()) {
+		network_.publish(std::string{MQTT_TOPIC} + "/active/" + group + "/" + name, "", true);
+	}
+
+	dirty_config();
 }
 
 std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
