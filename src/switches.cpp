@@ -138,7 +138,7 @@ void Switches::load_rtc_state() {
 		return;
 	}
 
-	std::array<uint32_t,NUM_SWITCHES> states;
+	std::array<uint32_t,NUM_SWITCHES> states{};
 
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		states[i] = rtc_states_[i];
@@ -159,7 +159,7 @@ void Switches::load_rtc_state() {
 }
 
 void Switches::save_rtc_state() {
-	std::array<uint32_t,NUM_SWITCHES> states;
+	std::array<uint32_t,NUM_SWITCHES> states{};
 
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		states[i] = state_[i].active;

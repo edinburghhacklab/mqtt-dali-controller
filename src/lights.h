@@ -55,8 +55,9 @@ private:
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
+	static constexpr size_t RTC_LEVELS_SIZE = ((MAX_ADDR+1)+3)/4;
 
-	static uint32_t rtc_crc(const std::array<uint32_t,MAX_ADDR+1> &levels);
+	static uint32_t rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels);
 
 	void publish_active_presets();
 	void publish_levels(bool force);
@@ -65,7 +66,7 @@ private:
 	void load_rtc_state();
 	void save_rtc_state();
 
-	static uint32_t rtc_levels_[MAX_ADDR+1];
+	static uint32_t rtc_levels_[RTC_LEVELS_SIZE];
 	static uint32_t rtc_crc_;
 
 	Network &network_;

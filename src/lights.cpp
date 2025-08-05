@@ -34,12 +34,12 @@
 #include "network.h"
 #include "util.h"
 
-RTC_NOINIT_ATTR uint32_t Lights::rtc_levels_[MAX_ADDR+1];
+RTC_NOINIT_ATTR uint32_t Lights::rtc_levels_[RTC_LEVELS_SIZE];
 RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
 
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
-	levels_.fill(0xFF);
+	levels_.fill(0xFFU);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
@@ -82,7 +82,7 @@ bool Lights::is_idle() {
 	return esp_timer_get_time() - last_activity_us_ >= IDLE_US;
 }
 
-uint32_t Lights::rtc_crc(const std::array<uint32_t,MAX_ADDR+1> &levels) {
+uint32_t Lights::rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels) {
 	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&levels), sizeof(levels));
 }
 
@@ -92,9 +92,9 @@ void Lights::load_rtc_state() {
 		return;
 	}
 
-	std::array<uint32_t,MAX_ADDR+1> levels;
+	std::array<uint32_t,RTC_LEVELS_SIZE> levels{};
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < RTC_LEVELS_SIZE; i++) {
 		levels[i] = rtc_levels_[i];
 	}
 
@@ -102,8 +102,9 @@ void Lights::load_rtc_state() {
 
 	if (rtc_crc_ == expected_crc) {
 		ESP_LOGE(TAG, "Restoring light levels from RTC memory");
+
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-			levels_[i] = levels[i];
+			levels_[i] = (levels[i/4] >> (8 * (i % 4))) & 0xFFU;
 		}
 	} else {
 		ESP_LOGE(TAG, "Ignoring light levels in RTC memory, checksum mismatch 0x%08X != 0x%08X",
@@ -112,10 +113,13 @@ void Lights::load_rtc_state() {
 }
 
 void Lights::save_rtc_state() {
-	std::array<uint32_t,MAX_ADDR+1> levels;
+	std::array<uint32_t,RTC_LEVELS_SIZE> levels{};
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		levels[i] = levels_[i];
+		levels[i/4] |= levels_[i] << (8 * (i % 4));
+	}
+
+	for (unsigned int i = 0; i < levels.size(); i++) {
 		rtc_levels_[i] = levels[i];
 	}
 
@@ -288,7 +292,7 @@ void Lights::publish_levels(bool force) {
 	size_t offset = 0;
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		unsigned int value = (levels_[i] & 0xFF);
+		unsigned int value = (levels_[i] & 0xFFU);
 
 		if (addresses[i]) {
 			value |= LEVEL_PRESENT;
