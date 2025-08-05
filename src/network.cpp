@@ -122,6 +122,7 @@ void Network::send_queued_messages() {
 
 		mqtt_.publish(message.topic(), payload.first, payload.second, message.retain());
 		send_messages_.pop_front();
+		yield();
 	}
 }
 

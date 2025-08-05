@@ -86,14 +86,16 @@ void setup() {
 
 		if (topic_str == "meta/mqtt-agents/poll") {
 			network.publish("meta/mqtt-agents/reply", network.device_id());
-			return;
-		} else if (topic_str.rfind(MQTT_TOPIC, 0) != 0) {
-			return;
+			topic_str.clear();
+		} else if (topic_str.rfind(MQTT_TOPIC, 0) == 0) {
+			topic_str = topic_str.substr(strlen(MQTT_TOPIC));
+		} else {
+			topic_str.clear();
 		}
 
-		topic_str = topic_str.substr(strlen(MQTT_TOPIC));
-
-		if (topic_str == "/startup_complete") {
+		if (topic_str == "") {
+			/* Do nothing */
+		} else if (topic_str == "/startup_complete") {
 			if (!startup_complete) {
 				ESP_LOGE(TAG, "Startup complete");
 				set_startup_complete(true);
@@ -189,6 +191,7 @@ void setup() {
 			lights.set_level(light_id, value);
 		}
 
+		yield();
 		network.send_queued_messages();
 	});
 }
