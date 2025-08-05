@@ -162,7 +162,7 @@ void setup() {
 					config.delete_preset(preset_name);
 				} else if (light_id == "levels") {
 					config.set_preset(preset_name, std::string{(const char *)payload, length});
-				} else if (light_id == "all" || (light_id[0] >= '0' && light_id[0] <= '9')) {
+				} else {
 					long value = -1;
 
 					if (length) {
