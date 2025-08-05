@@ -52,7 +52,7 @@ void Switches::setup() {
 	}
 
 	std::thread t;
-	make_thread(t, "switches", 4096, 19, &Switches::run_loop, this);
+	make_thread(t, "switches", 8192, 19, &Switches::run_loop, this);
 	t.detach();
 }
 
@@ -86,15 +86,7 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 		ESP_LOGE(TAG, "Switch %u turned %s", switch_id,
 			state_[switch_id].active ? "on" : "off");
 
-		network_.publish(std::string{MQTT_TOPIC}
-			+ "/switch/" + std::to_string(switch_id) + "/state",
-			state_[switch_id].active ? "1" : "0", true);
-		state_[switch_id].report_us = esp_timer_get_time();
-
-		if (!group.empty()) {
-			lights_.set_power(config_.get_group_addresses(group),
-				state_[switch_id].active);
-		}
+		publish_switch(switch_id, group);
 
 		if (!ignore && !group.empty() && !preset.empty()) {
 			std::string name = config_.get_switch_name(switch_id);
@@ -114,18 +106,22 @@ unsigned long Switches::run_switch(unsigned int switch_id) {
 		save_rtc_state();
 	} else if (state_[switch_id].report_us
 			&& esp_timer_get_time() - state_[switch_id].report_us >= ONE_M) {
-		if (!group.empty()) {
-			lights_.set_power(config_.get_group_addresses(group),
-				state_[switch_id].active);
-		}
+		publish_switch(switch_id, group);
+	}
+
+	return debounce.wait_ms;
+}
+
+void Switches::publish_switch(unsigned int switch_id, const std::string &group) {
+	if (!group.empty()) {
+		lights_.set_power(config_.get_group_addresses(group),
+			state_[switch_id].active);
 
 		network_.publish(std::string{MQTT_TOPIC}
 			+ "/switch/" + std::to_string(switch_id) + "/state",
 			state_[switch_id].active ? "1" : "0", true);
 		state_[switch_id].report_us = esp_timer_get_time();
 	}
-
-	return debounce.wait_ms;
 }
 
 uint32_t Switches::rtc_crc(const std::array<uint32_t,NUM_SWITCHES> &states) {

@@ -55,6 +55,7 @@ private:
 
 	unsigned long run_tasks() override;
 	unsigned long run_switch(unsigned int switch_id);
+	void publish_switch(unsigned int switch_id, const std::string &group);
 
 	void load_rtc_state();
 	void save_rtc_state();
