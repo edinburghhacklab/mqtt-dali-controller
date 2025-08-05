@@ -179,6 +179,7 @@ void Network::loop(std::function<void()> connected) {
 		if (!mqtt_.connected() && (!last_mqtt_us_ || esp_timer_get_time() - last_mqtt_us_ > ONE_S)) {
 			ESP_LOGE(TAG, "MQTT connecting");
 			mqtt_.connect(device_id_.c_str());
+			last_mqtt_us_ = esp_timer_get_time();
 
 			if (mqtt_.connected()) {
 				ESP_LOGE(TAG, "MQTT connected");
