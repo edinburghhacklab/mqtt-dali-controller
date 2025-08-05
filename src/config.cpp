@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cerrno>
 #include <mutex>
 #include <iostream>
 #include <set>
@@ -50,8 +51,6 @@
 static constexpr auto &FS = LittleFS;
 
 static const std::string BUILTIN_GROUP_IDLE = "idle";
-static const std::string RESERVED_GROUP_DELETE = "delete";
-static const std::string RESERVED_GROUP_LEVELS = "levels";
 static constexpr size_t MAX_TEXT_LEN = 256;
 static const std::string FILENAME = "/config.cbor";
 static const std::string BACKUP_FILENAME = "/config.cbor~";
@@ -64,6 +63,20 @@ static std::string quoted_string(const std::string &text) {
 	} else {
 		return std::string{"`"} + text + "`";
 	}
+}
+
+static std::string vector_text(const std::vector<std::string> &vector) {
+	std::string text;
+
+	for (const auto &item : vector) {
+		if (!text.empty()) {
+			text += ",";
+		}
+
+		text += item;
+	}
+
+	return text;
 }
 
 static bool readText(cbor::Reader &reader, std::string &text, size_t max_length) {
@@ -137,9 +150,10 @@ bool Config::valid_group_name(const std::string &name) {
 	return true;
 }
 
-bool Config::valid_preset_name(const std::string &name) {
-	if (name == BUILTIN_PRESET_OFF
+bool Config::valid_preset_name(const std::string &name, bool use) {
+	if ((name == BUILTIN_PRESET_OFF && !use)
 			|| name == RESERVED_PRESET_CUSTOM
+			|| name == RESERVED_PRESET_ORDER
 			|| name == RESERVED_PRESET_UNKNOWN
 			|| name.empty()
 			|| name.length() > MAX_PRESET_NAME_LEN) {
@@ -304,6 +318,10 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			if (!read_config_presets(reader)) {
 				return false;
 			}
+		} else if (key == "order") {
+			if (!read_config_order(reader)) {
+				return false;
+			}
 		} else {
 			ESP_LOGE(TAG, "Unknown key: %s", key.c_str());
 
@@ -457,7 +475,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 
 			ESP_LOGE(TAG, "Switch %u name = %s", switch_id, name.c_str());
-			data_.switches[switch_id].name = name;
+			data_.switches[switch_id].name = std::move(name);
 		} else if (key == "group") {
 			std::string group;
 
@@ -467,7 +485,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 
 			if (Config::valid_group_name(group)) {
 				ESP_LOGE(TAG, "Switch %u group = %s", switch_id, group.c_str());
-				data_.switches[switch_id].group = group;
+				data_.switches[switch_id].group = std::move(group);
 			} else {
 				ESP_LOGE(TAG, "Switch %u invalid group ignored: %s", switch_id, group.c_str());
 			}
@@ -478,9 +496,9 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			if (Config::valid_preset_name(preset)) {
+			if (Config::valid_preset_name(preset, true)) {
 				ESP_LOGE(TAG, "Switch %u preset = %s", switch_id, preset.c_str());
-				data_.switches[switch_id].preset = preset;
+				data_.switches[switch_id].preset = std::move(preset);
 			} else {
 				ESP_LOGE(TAG, "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
 			}
@@ -592,6 +610,32 @@ bool ConfigFile::read_config_preset_levels(cbor::Reader &reader, std::array<int1
 	return true;
 }
 
+bool ConfigFile::read_config_order(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string preset;
+
+		if (!readText(reader, preset, UINT8_MAX)) {
+			return false;
+		}
+
+		if (Config::valid_preset_name(preset, true)) {
+			ESP_LOGE(TAG, "Ordered preset %zu: %s", data_.ordered.size(), preset.c_str());
+			data_.ordered.emplace_back(std::move(preset));
+		} else {
+			ESP_LOGE(TAG, "Ignoring invalid preset: %s", preset.c_str());
+		}
+	}
+
+	return true;
+}
+
 void Config::dirty_config() {
 	std::lock_guard lock{data_mutex_};
 
@@ -670,7 +714,7 @@ bool ConfigFile::write_config(const std::string &filename) const {
 }
 
 void ConfigFile::write_config(cbor::Writer &writer) const {
-	writer.beginMap(4);
+	writer.beginMap(5);
 
 	writeText(writer, "lights");
 	writer.beginArray(MAX_ADDR+1);
@@ -722,6 +766,12 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 			writer.writeInt(preset.second[i]);
 		}
 	}
+
+	writeText(writer, "order");
+	writer.beginArray(data_.ordered.size());
+	for (const auto &preset : data_.ordered) {
+		writeText(writer, preset);
+	}
 }
 
 void Config::publish_config() const {
@@ -746,6 +796,9 @@ void Config::publish_config() const {
 	for (const auto &preset : current_.presets) {
 		publish_preset(preset.first, preset.second);
 	}
+
+	network_.publish(std::string{MQTT_TOPIC} + "/preset/order",
+		vector_text(current_.ordered), true);
 }
 
 void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const {
@@ -970,7 +1023,7 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 	std::lock_guard lock{data_mutex_};
 
 	if (switch_id < NUM_SWITCHES) {
-		if (!valid_preset_name(preset)) {
+		if (!valid_preset_name(preset, true)) {
 			return;
 		}
 
@@ -1024,6 +1077,17 @@ bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> 
 	return true;
 }
 
+bool Config::get_ordered_preset(unsigned long long idx, std::string &name) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (current_.ordered.empty()) {
+		return false;
+	}
+
+	name = current_.ordered[idx % current_.ordered.size()];
+	return true;
+}
+
 void Config::set_preset(const std::string &name, const std::string &lights, long level) {
 	if (level < -1 || level > MAX_LEVEL) {
 		return;
@@ -1074,6 +1138,33 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 
 	if (before != after) {
 		network_.report(TAG, std::string{"Preset "} + name + ": "
+			+ quoted_string(before) + " -> " + quoted_string(after));
+	}
+
+	dirty_config();
+}
+
+void Config::set_ordered_presets(const std::string &names) {
+	std::lock_guard lock{data_mutex_};
+	std::istringstream input{names};
+	std::string item;
+	std::vector<std::string> new_ordered;
+
+	auto before = vector_text(current_.ordered);
+
+	while (std::getline(input, item, ',')) {
+		if (valid_preset_name(item, true)) {
+			new_ordered.emplace_back(std::move(item));
+		}
+	}
+
+	current_.ordered = std::move(new_ordered);
+
+	auto after = vector_text(current_.ordered);
+
+	if (before != after) {
+		network_.publish(std::string{MQTT_TOPIC} + "/preset/order", after, true);
+		network_.report(TAG, std::string{"Preset order: "}
 			+ quoted_string(before) + " -> " + quoted_string(after));
 	}
 
@@ -1187,8 +1278,9 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
 		} else if (dash_idx == std::string::npos) {
 			char *endptr = nullptr;
 
+			errno = 0;
 			begin = end = std::strtoul(item.c_str(), &endptr, 10);
-			if (item.empty() || !endptr || endptr[0]) {
+			if (item.empty() || !endptr || endptr[0] || errno) {
 				continue;
 			}
 		} else {
@@ -1199,8 +1291,9 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
 			{
 				char *endptr = nullptr;
 
+				errno = 0;
 				begin = std::strtoul(item.c_str(), &endptr, 10);
-				if (item.empty() || !endptr || endptr[0]) {
+				if (item.empty() || !endptr || endptr[0] || errno) {
 					continue;
 				}
 			}
@@ -1208,8 +1301,9 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
 			{
 				char *endptr = nullptr;
 
+				errno = 0;
 				end = std::strtoul(second.c_str(), &endptr, 10);
-				if (second.empty() || !endptr || endptr[0]) {
+				if (second.empty() || !endptr || endptr[0] || errno) {
 					continue;
 				}
 			}

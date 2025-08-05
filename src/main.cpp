@@ -20,6 +20,7 @@
 #include <esp_timer.h>
 
 #include <array>
+#include <cerrno>
 #include <cstdlib>
 #include <mutex>
 #include <string>
@@ -133,6 +134,7 @@ void setup() {
 		} else if (topic_str == "/switch/1/preset") {
 			config.set_switch_preset(1, std::string{(const char*)payload, length});
 		} else if (topic_str.rfind(group_prefix, 0) == 0) {
+			/* "/group/+" */
 			std::string group_name = topic_str.substr(group_prefix.length());
 
 			if (length) {
@@ -146,21 +148,27 @@ void setup() {
 			auto idx = preset_name.find("/");
 
 			if (idx == std::string::npos) {
+				/* "/preset/+" */
 				std::string payload_copy = std::string{(const char *)payload, length};
 
-				if (payload_copy.empty()) {
-					payload_copy = BUILTIN_GROUP_ALL;
-				}
+				if (preset_name == RESERVED_PRESET_ORDER) {
+					config.set_ordered_presets(payload_copy);
+				} else {
+					if (payload_copy.empty()) {
+						payload_copy = BUILTIN_GROUP_ALL;
+					}
 
-				lights.select_preset(preset_name, payload_copy);
+					lights.select_preset(preset_name, payload_copy);
+				}
 			} else {
+				/* "/preset/+/+" */
 				std::string light_id = preset_name.substr(idx + 1);
 
 				preset_name = preset_name.substr(0, idx);
 
-				if (light_id == "delete") {
+				if (light_id == RESERVED_GROUP_DELETE) {
 					config.delete_preset(preset_name);
-				} else if (light_id == "levels") {
+				} else if (light_id == RESERVED_GROUP_LEVELS) {
 					config.set_preset(preset_name, std::string{(const char *)payload, length});
 				} else {
 					long value = -1;
@@ -169,8 +177,9 @@ void setup() {
 						std::string payload_copy = std::string{(const char *)payload, length};
 						char *endptr = nullptr;
 
+						errno = 0;
 						value = std::strtol(payload_copy.c_str(), &endptr, 10);
-						if (!endptr || endptr[0]) {
+						if (!endptr || endptr[0] || errno) {
 							return;
 						}
 					}
@@ -179,12 +188,14 @@ void setup() {
 				}
 			}
 		} else if (topic_str.rfind(set_prefix, 0) == 0) {
+			/* "/set/+" */
 			std::string light_id = topic_str.substr(set_prefix.length());
 			std::string payload_copy = std::string{(const char *)payload, length};
 			char *endptr = nullptr;
 
+			errno = 0;
 			long value = std::strtol(payload_copy.c_str(), &endptr, 10);
-			if (!length || !endptr || endptr[0]) {
+			if (!length || !endptr || endptr[0] || errno) {
 				return;
 			}
 

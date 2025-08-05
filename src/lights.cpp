@@ -24,6 +24,7 @@
 
 #include <array>
 #include <bitset>
+#include <cerrno>
 #include <mutex>
 #include <string>
 #include <unordered_set>
@@ -126,7 +127,7 @@ void Lights::save_rtc_state() {
 	rtc_crc_ = rtc_crc(levels);
 }
 
-void Lights::select_preset(const std::string &name, const std::string &lights, bool internal) {
+void Lights::select_preset(std::string name, const std::string &lights, bool internal) {
 	const auto addresses = config_.get_addresses();
 	bool idle_only;
 	const auto light_ids = config_.parse_light_ids(lights, idle_only);
@@ -134,6 +135,20 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 	std::lock_guard lights_lock{lights_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
 	bool changed = false;
+
+	if (name.empty()) {
+		return;
+	}
+
+	errno = 0;
+	char *endptr = nullptr;
+	unsigned long long value = std::strtoull(name.c_str(), &endptr, 10);
+
+	if (endptr && !endptr[0] && !errno) {
+		if (!config_.get_ordered_preset(value, name)) {
+			return;
+		}
+	}
 
 	if (!config_.get_preset(name, preset_levels)) {
 		return;

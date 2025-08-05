@@ -44,7 +44,7 @@ public:
 	void address_config_changed(const std::string &group);
 
 	std::array<uint8_t,MAX_ADDR+1> get_levels() const;
-	void select_preset(const std::string &name, const std::string &lights, bool internal = false);
+	void select_preset(std::string name, const std::string &lights, bool internal = false);
 	void set_level(const std::string &lights, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
 

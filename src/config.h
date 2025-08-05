@@ -36,6 +36,9 @@
 
 static const std::string BUILTIN_GROUP_ALL = "all";
 static const std::string BUILTIN_PRESET_OFF = "off";
+static const std::string RESERVED_GROUP_DELETE = "delete";
+static const std::string RESERVED_GROUP_LEVELS = "levels";
+static const std::string RESERVED_PRESET_ORDER = "order";
 
 namespace cbor = qindesign::cbor;
 
@@ -60,12 +63,14 @@ struct ConfigData {
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::unordered_map<std::string,std::bitset<MAX_ADDR+1>> groups;
 	std::unordered_map<std::string,std::array<int16_t,MAX_ADDR+1>> presets;
+	std::vector<std::string> ordered;
 
 	bool operator==(const ConfigData &other) const {
 		return this->lights == other.lights
 			&& this->switches == other.switches
 			&& this->groups == other.groups
-			&& this->presets == other.presets;
+			&& this->presets == other.presets
+			&& this->ordered == other.ordered;
 	}
 
 	inline bool operator!=(const ConfigData &other) const { return !(*this == other); }
@@ -91,6 +96,7 @@ private:
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
 	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
+	bool read_config_order(cbor::Reader &reader);
 
 	void write_config(cbor::Writer &writer) const;
 	bool write_config(const std::string &filename) const;
@@ -104,7 +110,7 @@ public:
 	explicit Config(std::mutex &file_mutex, Network &network);
 
 	static bool valid_group_name(const std::string &name);
-	static bool valid_preset_name(const std::string &name);
+	static bool valid_preset_name(const std::string &name, bool use = false);
 	static std::string addresses_text(const std::bitset<MAX_ADDR+1> &addresses);
 	static std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,
 		const std::bitset<MAX_ADDR+1> *filter);
@@ -136,8 +142,10 @@ public:
 
 	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;
+	bool get_ordered_preset(unsigned long long idx, std::string &name) const;
 	void set_preset(const std::string &name, const std::string &lights, long level);
 	void set_preset(const std::string &name, std::string levels);
+	void set_ordered_presets(const std::string &names);
 	void delete_preset(const std::string &name);
 
 	std::set<unsigned int> parse_light_ids(const std::string &light_id, bool &idle_only) const;

@@ -89,7 +89,8 @@ dali/preset/<name>/<<0-63>[-<0-63>]|group>,... <0-254>
 dali/preset/<name>/<<0-63>[-<0-63>]|group>,... (null)
 ```
 
-The reserved preset names `off`, `custom` and `unknown` can't be configured.
+The reserved preset names `off`, `custom`, `order` and `unknown` can't be
+configured.
 
 The maximum length of a preset name is 50 characters and they can only contain
 lowercase alphanumeric characters as well as `.`, `-` and `_`. Preset names must
@@ -109,6 +110,11 @@ Remove a preset:
 
 ```
 dali/preset/<name>/delete (null)
+```
+
+A subset of presets can be configured to be accessed in numeric order:
+```
+dali/preset/order <name>,... (retain)
 ```
 
 ### Usage
@@ -141,6 +147,11 @@ Select preset `off` for all lights, but only when idle for at least 10 seconds:
 
 ```
 dali/preset/off all,idle
+```
+
+Select a numeric order preset:
+```
+dali/preset/<0-18446744073709551615> <<0-63>[-<0-63>]|group>
 ```
 
 ### Miscellaneous
