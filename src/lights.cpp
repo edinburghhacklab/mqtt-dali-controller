@@ -163,7 +163,9 @@ void Lights::select_preset(const std::string &name, const std::string &lights, b
 		}
 	}
 
-	last_activity_us_ = esp_timer_get_time();
+	if (!idle_only) {
+		last_activity_us_ = esp_timer_get_time();
+	}
 
 	if (changed) {
 		save_rtc_state();
