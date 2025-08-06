@@ -83,7 +83,7 @@ void Network::publish(const std::string &topic, const std::string &payload, bool
 		message_queue_.pop_front();
 	}
 
-	message_queue_.emplace_back(std::move(message));
+	message_queue_.push_back(std::move(message));
 	maximum_queue_size_ = std::max(maximum_queue_size_, message_queue_.size());
 }
 
@@ -98,7 +98,7 @@ void Network::send_queued_messages() {
 	size_t oversized = oversized_messages_;
 
 	while (!message_queue_.empty() && send_messages_.size() < count) {
-		send_messages_.emplace_back(std::move(message_queue_.front()));
+		send_messages_.push_back(std::move(message_queue_.front()));
 		message_queue_.pop_front();
 	}
 

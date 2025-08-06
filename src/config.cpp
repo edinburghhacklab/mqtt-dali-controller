@@ -627,7 +627,7 @@ bool ConfigFile::read_config_order(cbor::Reader &reader) {
 
 		if (Config::valid_preset_name(preset, true)) {
 			ESP_LOGE(TAG, "Ordered preset %zu: %s", data_.ordered.size(), preset.c_str());
-			data_.ordered.emplace_back(std::move(preset));
+			data_.ordered.push_back(std::move(preset));
 		} else {
 			ESP_LOGE(TAG, "Ignoring invalid preset: %s", preset.c_str());
 		}
@@ -1154,7 +1154,7 @@ void Config::set_ordered_presets(const std::string &names) {
 
 	while (std::getline(input, item, ',')) {
 		if (valid_preset_name(item, true)) {
-			new_ordered.emplace_back(std::move(item));
+			new_ordered.push_back(std::move(item));
 		}
 	}
 
@@ -1357,7 +1357,7 @@ std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
 			light_texts.push_back(std::to_string(begin) + "-" + std::to_string(light_id));
 		} else {
 			begin = light_id;
-			light_texts.emplace_back(std::move(std::to_string(light_id)));
+			light_texts.push_back(std::move(std::to_string(light_id)));
 		}
 
 		previous = light_id;
