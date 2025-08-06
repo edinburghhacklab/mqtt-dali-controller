@@ -18,7 +18,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
 
 #include <mutex>
 
@@ -53,8 +52,6 @@ private:
 
 	Network &network_;
 	std::mutex &file_mutex_;
-	Adafruit_NeoPixel led_{1, LED_GPIO, NEO_GRB | NEO_KHZ800};
-	uint64_t last_led_us_{0};
 	uint64_t last_publish_us_{0};
 	bool startup_complete_{false};
 };

@@ -168,19 +168,15 @@ void UI::publish_stats() {
 }
 
 void UI::setup() {
+	pinMode(LED_GPIO, OUTPUT);
+	digitalWrite(LED_GPIO, LOW);
+
 	if (x509_crt_bundle_end - x509_crt_bundle_start >= 2) {
 		arduino_esp_crt_bundle_set(x509_crt_bundle_start);
 	}
-
-	led_.begin();
 }
 
 void UI::loop() {
-	if (!last_led_us_ || esp_timer_get_time() - last_led_us_ >= ONE_M) {
-		led_.show();
-		last_led_us_ = esp_timer_get_time();
-	}
-
 	if (startup_complete_ && network_.connected()) {
 		if (!last_publish_us_ || esp_timer_get_time() - last_publish_us_ >= FIVE_M) {
 			publish_stats();
