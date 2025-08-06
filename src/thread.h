@@ -28,9 +28,10 @@
 
 template<class Function, class... Args>
 void make_thread(std::thread &t, const char *name, size_t stack_size,
-		size_t prio, Function&& f, Args&&... args ) {
+		int core, size_t prio, Function&& f, Args&&... args ) {
 	auto cfg = esp_pthread_get_default_config();
 	cfg.stack_size = stack_size;
+	cfg.pin_to_core = core;
 	cfg.prio = prio;
 	cfg.thread_name = name;
 	esp_pthread_set_cfg(&cfg);

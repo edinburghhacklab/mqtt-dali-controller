@@ -52,7 +52,7 @@ void Switches::setup() {
 	}
 
 	std::thread t;
-	make_thread(t, "switches", 8192, 19, &Switches::run_loop, this);
+	make_thread(t, "switches", 8192, 1, 19, &Switches::run_loop, this);
 	t.detach();
 }
 
