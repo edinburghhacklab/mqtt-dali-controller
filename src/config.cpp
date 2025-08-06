@@ -193,7 +193,7 @@ std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		if (addresses[i]) {
-			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFF));
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFFU));
 			offset += 2;
 		}
 	}
@@ -208,7 +208,7 @@ std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &lev
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		if (filter == nullptr || filter->test(i)) {
-			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFF));
+			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFFU));
 			offset += 2;
 		}
 	}
@@ -1215,7 +1215,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 		levels = levels.substr(2);
 
-		it->second[light_id++] = (level == 0xFF ? -1 : level);
+		it->second[light_id++] = (level == LEVEL_NO_CHANGE ? -1 : level);
 	}
 
 	auto after = preset_levels_text(it->second, &current_.lights);

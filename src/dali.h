@@ -18,27 +18,42 @@
 
 #pragma once
 
+#include <Arduino.h>
+
 #include <array>
+
+#include "thread.h"
 
 static constexpr uint8_t MAX_ADDR = 63;
 static constexpr uint8_t MAX_LEVEL = 254;
+static constexpr uint8_t LEVEL_NO_CHANGE = 255;
 
 class Config;
 class Lights;
 
-class Dali {
+class Dali: public WakeupThread {
 public:
 	Dali(const Config &config, const Lights &lights);
 
 	void setup();
-	void loop();
 
 private:
-	void transmit_all();
-	void transmit_one(uint8_t address, uint8_t level);
+	static constexpr const char *TAG = "DALI";
+	static constexpr auto BUS_LOW = HIGH;
+	static constexpr auto BUS_HIGH = LOW;
+	static constexpr unsigned long TX_POWER_LEVEL_MS = 25;
+	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;
+	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
+
+	~Dali() = delete;
+
+	unsigned long run_tasks() override;
+
+	void tx_power_level(uint8_t address, uint8_t level);
 
 	const Config &config_;
 	const Lights &lights_;
 	std::array<uint8_t,MAX_ADDR+1> tx_levels_{};
 	uint64_t last_tx_us_{0};
+	unsigned int next_address_{0};
 };

@@ -40,7 +40,7 @@ RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
 
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
-	levels_.fill(0xFFU);
+	levels_.fill(LEVEL_NO_CHANGE);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);

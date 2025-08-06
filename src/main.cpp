@@ -46,7 +46,6 @@ static Network network;
 static UI ui{file_mutex, network};
 static Config config{file_mutex, network};
 static Lights lights{network, config};
-static Dali dali{config, lights};
 static bool startup_complete{false};
 
 namespace cbor = qindesign::cbor;
@@ -73,6 +72,7 @@ void setup() {
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL2));
 
 	Switches &switches = *new Switches{network, config, lights};
+	Dali &dali = *new Dali{config, lights};
 
 	dali.setup();
 	config.setup();
@@ -208,7 +208,6 @@ void setup() {
 }
 
 void loop() {
-	dali.loop();
 	lights.loop();
 	ui.loop();
 
