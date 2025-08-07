@@ -17,6 +17,8 @@
  */
 
 #include <Arduino.h>
+#include <esp_ota_ops.h>
+#include <esp_task_wdt.h>
 #include <esp_timer.h>
 
 #include <array>
@@ -47,6 +49,8 @@ static UI ui{file_mutex, network};
 static Config config{file_mutex, network};
 static Lights lights{network, config};
 static bool startup_complete{false};
+static bool startup_watchdog{false};
+static bool startup_watchdog_failed{false};
 
 namespace cbor = qindesign::cbor;
 
@@ -54,6 +58,16 @@ static void set_startup_complete(bool state) {
 	startup_complete = state;
 	lights.startup_complete(state);
 	ui.startup_complete(state);
+}
+
+static bool ota_verification_pending() {
+	esp_ota_img_states_t state;
+
+	if (esp_ota_get_state_partition(esp_ota_get_running_partition(), &state)) {
+		state = ESP_OTA_IMG_UNDEFINED;
+	}
+
+	return state == ESP_OTA_IMG_PENDING_VERIFY;
 }
 
 extern "C" {
@@ -69,6 +83,12 @@ bool testSPIRAM() {
 }
 
 void setup() {
+	if (ota_verification_pending()) {
+		ESP_LOGE(TAG, "Startup watchdog started: OTA verification pending");
+		ESP_ERROR_CHECK(esp_task_wdt_add(nullptr));
+		startup_watchdog = true;
+	}
+
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL2));
 
 	Switches &switches = *new Switches{network, config, lights};
@@ -208,6 +228,19 @@ void setup() {
 }
 
 void loop() {
+	if (startup_watchdog) {
+		if (startup_complete) {
+			ESP_LOGE(TAG, "Startup watchdog cancelled");
+			esp_task_wdt_delete(nullptr);
+			startup_watchdog = false;
+		} else if (esp_timer_get_time() < ONE_M) {
+			esp_task_wdt_reset();
+		} else if (!startup_watchdog_failed) {
+			ESP_LOGE(TAG, "Startup watchdog failure");
+			startup_watchdog_failed = true;
+		}
+	}
+
 	lights.loop();
 	ui.loop();
 
