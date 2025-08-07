@@ -40,7 +40,7 @@ dali/addresses [<00-3F>...] (retain)
 
 Light levels will be output when they change and every 60 seconds:
 ```
-dali/levels <000-7FE>... (retain)
+dali/levels <000-7FF>... (retain)
 ```
 The level for all addresses are output, with a value of `FF` if the level hasn't
 been set yet.
@@ -84,13 +84,16 @@ dali/switch/<0-1>/group <name> (retain)
 dali/switch/<0-1>/preset <name> (retain)
 ```
 
-Light switch status is reported as `dali/switch/<0-1>/state` when it changes
-and then every 60 seconds.
+Light switch status is reported when it changes and then every 60 seconds:
+```
+dali/switch/<0-1>/state <0-1> (retain)
+```
 
 ### Presets
 
-Up to 20 presets can be configured, setting an empty value to skip that light:
-
+Up to 20 presets can be configured, by assigning light levels to each light,
+setting an empty value to skip that light (retaining whatever its previous level
+was):
 ```
 dali/preset/<name>/<<0-63>[-<0-63>]|group>,... <0-254>
 dali/preset/<name>/<<0-63>[-<0-63>]|group>,... (null)
@@ -108,13 +111,16 @@ Presets will be republished with light level values for all addresses in order:
 dali/preset/<name>/levels <00-FF>... (retain)
 ```
 
-The active presets are reported as `dali/active/<group>/<name>` on startup, when
-they change and every 60 seconds (cycling through one group at a time because
-there are a lot of topic name combinations). It's possible for multiple presets
-to be active as long as one or more lights were last set using that preset.
+The active presets are reported as on startup, when they change and every 60
+seconds (cycling through one group at a time because there are a lot of topic
+name combinations):
+```
+dali/active/<group>/<name> <0-1> (retain)
+```
+It's possible for multiple presets to be active as long as
+one or more lights were last set using that preset.
 
 Remove a preset:
-
 ```
 dali/preset/<name>/delete (null)
 ```
@@ -126,32 +132,31 @@ dali/preset/order <name>,... (retain)
 
 ### Usage
 
-Set individual lights or groups:
+Set the level of individual lights or groups:
 
 ```
 dali/set/<<0-63>[-<0-63>]|group>,... <0-254>
 ```
 
-Select preset for all lights:
+Select a preset for all lights:
 
 ```
 dali/preset/<name> (null)
 dali/preset/<name> all
 ```
 
-Select preset for individual lights or groups:
+Select a preset for individual lights or groups:
 
 ```
-dali/preset/<name> <<0-63>[-<0-63>]|group>
+dali/preset/<name> <<0-63>[-<0-63>]|group>,...
 ```
 
 The built-in group `idle` changes the behaviour so that it only has an effect
-when idle for at least 10 seconds. This can be used to avoid a race condition
-when deciding to automatically turn off the lights at the same time someone is
-about to switch them on.
+if the light levels and switches haven't been changed for at least 10 seconds.
+This can be used to avoid a race condition when deciding to automatically turn
+off the lights at the same time someone is about to switch them on.
 
 Select preset `off` for all lights, but only when idle for at least 10 seconds:
-
 ```
 dali/preset/off all,idle
 ```
@@ -163,43 +168,40 @@ dali/preset/<0-18446744073709551615> <<0-63>[-<0-63>]|group>
 
 ### Miscellaneous
 
-Reload config:
+Statistics are output every 5 minutes. Responses are `dali/stats/#`, look at
+[`UI::publish_stats()`](src/ui.cpp) for more information.
 
+Reload config:
 ```
 dali/reload (null)
 ```
 
 Reboot:
-
 ```
 dali/reboot (null)
 ```
 
 Idle time (reported every 60 seconds after a change in light levels):
-
 ```
 dali/idle_us <microseconds>
 ```
 
 ### OTA Updates
 
-Query status:
-
+Query application, boot and firmware status and output stats:
 ```
 dali/status (null)
 ```
-
-Responses are `dali/g0/application/#` and `dali/g0/partition/#`.
+Responses are `dali/g0/application/#`, `dali/g0/boot/#` and
+`dali/g0/partition/#`.
 
 Perform update:
-
 ```
 dali/ota/update (null)
 dali/reboot (null)
 ```
 
 Verify update:
-
 ```
 dali/ota/good (null)
 dali/ota/bad (null)
