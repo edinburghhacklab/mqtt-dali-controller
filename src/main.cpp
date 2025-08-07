@@ -122,6 +122,7 @@ void setup() {
 			if (!startup_complete) {
 				ESP_LOGE(TAG, "Startup complete");
 				set_startup_complete(true);
+				config.save_config();
 				config.publish_config();
 			}
 		} else if (topic_str == "/reboot") {
@@ -130,6 +131,7 @@ void setup() {
 			esp_restart();
 		} else if (topic_str == "/reload") {
 			config.load_config();
+			config.save_config();
 			config.publish_config();
 			lights.address_config_changed();
 			dali.wake_up();
