@@ -13,7 +13,8 @@ Control DALI lights using an ESP32-S3 over MQTT.
 `platformio run -t upload`
 
 ## Hardware interface
-The DALI interface is on GPIO 40 (RX) and 21 (TX).
+The DALI interface is on GPIO 40 (RX) and 21 (TX). This is active high which is
+the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
 The light switches are GPIO 11 and GPIO 12 (active low).
 
