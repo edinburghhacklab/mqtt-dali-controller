@@ -89,6 +89,11 @@ Light switch status is reported when it changes and then every 60 seconds:
 dali/switch/<0-1>/state <0-1> (retain)
 ```
 
+Whenever the light switch is turned on or off, the default preset (if
+configured) will be applied. This ensures that the lights function as expected
+when they're turned on even if their light levels have previously been dimmed or
+set to `off`.
+
 ### Presets
 
 Up to 20 presets can be configured, by assigning light levels to each light,
