@@ -116,7 +116,6 @@ public:
 		const std::bitset<MAX_ADDR+1> *filter);
 
 	void setup();
-	void set_dali(Dali &dali);
 	void loop();
 	void load_config();
 	void save_config();
@@ -168,7 +167,6 @@ private:
 	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const;
 
 	Network &network_;
-	Dali *dali_;
 
 	std::mutex &file_mutex_;
 	ConfigFile file_;

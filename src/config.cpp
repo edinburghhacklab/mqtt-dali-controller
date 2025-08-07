@@ -117,10 +117,6 @@ void Config::setup() {
 	load_config();
 }
 
-void Config::set_dali(Dali &dali) {
-	dali_ = &dali;
-}
-
 void Config::loop() {
 	save_config();
 }
@@ -238,10 +234,6 @@ void Config::load_config() {
 	last_saved_ = current_;
 	dirty_ = false;
 	saved_ = true;
-
-	if (dali_) {
-		dali_->wake_up();
-	}
 }
 
 bool ConfigFile::read_config(ConfigData &data) {
@@ -912,10 +904,6 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 
 	if (group == BUILTIN_GROUP_ALL) {
 		current_.lights = lights;
-
-		if (dali_) {
-			dali_->wake_up();
-		}
 	} else {
 		auto it = current_.groups.find(group);
 

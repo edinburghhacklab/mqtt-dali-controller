@@ -94,14 +94,14 @@ void setup() {
 
 	dali.setup();
 	config.setup();
+	dali.wake_up();
 	switches.setup();
 	ui.setup();
 
-	config.set_dali(dali);
 	lights.set_dali(dali);
 	ui.set_dali(dali);
 
-	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
+	network.setup([&dali] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string group_prefix = "/group/";
 		static const std::string preset_prefix = "/preset/";
 		static const std::string set_prefix = "/set/";
@@ -132,6 +132,7 @@ void setup() {
 			config.load_config();
 			config.publish_config();
 			lights.address_config_changed();
+			dali.wake_up();
 		} else if (topic_str == "/status") {
 			ui.status_report();
 		} else if (topic_str == "/ota/update") {
@@ -143,6 +144,7 @@ void setup() {
 		} else if (topic_str == "/addresses") {
 			config.set_addresses(std::string{(const char*)payload, length});
 			lights.address_config_changed(BUILTIN_GROUP_ALL);
+			dali.wake_up();
 		} else if (topic_str == "/switch/0/group") {
 			config.set_switch_group(0, std::string{(const char*)payload, length});
 		} else if (topic_str == "/switch/1/group") {
