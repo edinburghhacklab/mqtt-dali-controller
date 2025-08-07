@@ -21,6 +21,7 @@
 #include <Arduino.h>
 
 #include <array>
+#include <mutex>
 
 #include "thread.h"
 
@@ -31,11 +32,21 @@ static constexpr uint8_t LEVEL_NO_CHANGE = 255;
 class Config;
 class Lights;
 
+class DaliStats {
+public:
+	uint64_t min_tx_us{UINT64_MAX}; /**< Minimum duration of a transmitted command (µs) */
+	uint64_t max_tx_us{0}; /**< Maximum duration of a transmitted command (µs) */
+	uint64_t tx_count{0}; /**< Number of transmitted commands */
+	uint64_t max_burst_tx_count{0}; /**< Maximum number of consecutively transmitted commands  */
+	uint64_t max_burst_us{0}; /**< Maximum runtime of consecutively transmitted commands */
+};
+
 class Dali: public WakeupThread {
 public:
 	Dali(const Config &config, const Lights &lights);
 
 	void setup();
+	DaliStats get_stats();
 
 	using WakeupThread::wake_up;
 	using WakeupThread::wake_up_isr;
@@ -80,4 +91,7 @@ private:
 	rmt_obj_t *rmt_{nullptr};
 	std::array<uint8_t,MAX_ADDR+1> tx_levels_{};
 	unsigned int next_address_{0};
+
+	std::mutex stats_mutex_;
+	DaliStats stats_;
 };

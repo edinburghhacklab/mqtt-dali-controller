@@ -30,6 +30,7 @@
 #include <mutex>
 #include <string>
 
+#include "dali.h"
 #include "network.h"
 #include "util.h"
 
@@ -142,6 +143,23 @@ void UI::publish_partitions() {
 void UI::publish_stats() {
 	std::string topic = std::string{MQTT_TOPIC} + "/stats";
 
+	if (dali_) {
+		DaliStats dali_stats = dali_->get_stats();
+		std::string dali_topic = topic + "/dali";
+
+		network_.publish(dali_topic + "/tx_count", std::to_string(dali_stats.tx_count));
+
+		if (dali_stats.tx_count > 0) {
+			network_.publish(dali_topic + "/min_tx_us", std::to_string(dali_stats.min_tx_us));
+			network_.publish(dali_topic + "/max_tx_us", std::to_string(dali_stats.max_tx_us));
+		}
+
+		if (dali_stats.max_burst_tx_count > 0) {
+			network_.publish(dali_topic + "/max_burst_tx_count", std::to_string(dali_stats.max_burst_tx_count));
+			network_.publish(dali_topic + "/max_burst_us", std::to_string(dali_stats.max_burst_us));
+		}
+	}
+
 	network_.publish(topic + "/heap/size", std::to_string(ESP.getHeapSize()));
 	network_.publish(topic + "/heap/free", std::to_string(ESP.getFreeHeap()));
 	network_.publish(topic + "/heap/min_free_size", std::to_string(ESP.getMinFreeHeap()));
@@ -174,6 +192,10 @@ void UI::setup() {
 	if (x509_crt_bundle_end - x509_crt_bundle_start >= 2) {
 		arduino_esp_crt_bundle_set(x509_crt_bundle_start);
 	}
+}
+
+void UI::set_dali(Dali &dali) {
+	dali_ = &dali;
 }
 
 void UI::loop() {

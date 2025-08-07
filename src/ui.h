@@ -21,6 +21,7 @@
 
 #include <mutex>
 
+class Dali;
 class Network;
 
 class UI {
@@ -28,6 +29,7 @@ public:
 	UI(std::mutex &file_mutex, Network &network);
 
 	void setup();
+	void set_dali(Dali &dali);
 	void loop();
 	void startup_complete(bool state);
 	void status_report();
@@ -51,6 +53,7 @@ private:
 	void ota_result(bool good);
 
 	Network &network_;
+	Dali *dali_;
 	std::mutex &file_mutex_;
 	uint64_t last_publish_us_{0};
 	bool startup_complete_{false};

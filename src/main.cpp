@@ -101,6 +101,7 @@ void setup() {
 
 	config.set_dali(dali);
 	lights.set_dali(dali);
+	ui.set_dali(dali);
 
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string group_prefix = "/group/";

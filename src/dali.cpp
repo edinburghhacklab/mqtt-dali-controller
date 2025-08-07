@@ -27,11 +27,14 @@
 
 #include <algorithm>
 #include <array>
+#include <mutex>
 
 #include "config.h"
 #include "lights.h"
 #include "util.h"
 
+/* github:espressif/arduino-esp32 cores/esp32/esp32-hal-rmt.h v2.0.17 */
+#if 0
 struct rmt_obj_s {
 	bool allocated;
 	EventGroupHandle_t events;
@@ -45,6 +48,7 @@ struct rmt_obj_s {
 	bool rx_completed;
 	bool tx_not_rx;
 };
+#endif
 
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
@@ -93,6 +97,14 @@ void Dali::setup() {
 	t.detach();
 }
 
+DaliStats Dali::get_stats() {
+	std::lock_guard lock{stats_mutex_};
+	DaliStats stats = stats_;
+
+	stats_ = {};
+	return stats;
+}
+
 unsigned long Dali::run_tasks() {
 	const unsigned long num_lights = config_.get_addresses().count();
 	const unsigned long refresh_delay_ms = num_lights == 0
@@ -101,6 +113,8 @@ unsigned long Dali::run_tasks() {
 	bool changed = false;
 	bool refresh = true;
 
+	uint64_t start = esp_timer_get_time();
+	uint64_t count = 0;
 	/*
 	 * Set power level for lights that have changed level, cycling through the
 	 * addresses each time to avoid preferring low-numbered lights.
@@ -119,6 +133,7 @@ unsigned long Dali::run_tasks() {
 					tx_levels_[address] = levels[address];
 					changed = true;
 					refresh = false;
+					count++;
 				}
 
 				esp_task_wdt_reset();
@@ -128,6 +143,14 @@ unsigned long Dali::run_tasks() {
 			next_address_ %= MAX_ADDR + 1;
 		}
 	} while (changed);
+
+	if (count > 0) {
+		uint64_t finish = esp_timer_get_time();
+		std::lock_guard lock{stats_mutex_};
+
+		stats_.max_burst_tx_count = std::max(stats_.max_burst_tx_count, count);
+		stats_.max_burst_us = std::max(stats_.max_burst_us, finish - start);
+	}
 
 	if (refresh) {
 		const auto lights = config_.get_addresses();
@@ -159,9 +182,11 @@ unsigned long Dali::run_tasks() {
 	return delay_ms;
 }
 
+#if 0
 bool Dali::async_ready() {
 	return rmt_wait_tx_done(static_cast<rmt_channel_t>(rmt_->channel), 0) == ESP_OK;
 }
+#endif
 
 inline size_t Dali::byte_to_symbols(rmt_data_t *symbols, uint8_t value) {
 	for (int i = 7; i >= 0; i--) {
@@ -172,7 +197,7 @@ inline size_t Dali::byte_to_symbols(rmt_data_t *symbols, uint8_t value) {
 }
 
 bool Dali::tx_idle() {
-	ESP_LOGE(TAG, "Idle");
+	//ESP_LOGE(TAG, "Idle");
 
 	std::array<rmt_data_t,1> symbols{DALI_STOP_IDLE};
 
@@ -184,7 +209,8 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 		return true;
 	}
 
-	ESP_LOGE(TAG, "Power level %u = %u", address, level);
+	uint64_t start = esp_timer_get_time();
+	//ESP_LOGE(TAG, "Power level %u = %u", address, level);
 
 	/*
 	 * Microchip Technology, AN1465
@@ -199,5 +225,12 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	i += byte_to_symbols(&symbols[i], level);
 	symbols[i++] = DALI_STOP_IDLE;
 
-	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
+	bool ret = rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
+	uint64_t finish = esp_timer_get_time();
+	std::lock_guard lock{stats_mutex_};
+
+	stats_.min_tx_us = std::min(stats_.min_tx_us, finish - start);
+	stats_.max_tx_us = std::max(stats_.max_tx_us, finish - start);
+	stats_.tx_count++;
+	return ret;
 }
