@@ -153,7 +153,7 @@ public:
 
 private:
 	static constexpr const char *TAG = "Config";
-	static constexpr size_t MAX_GROUPS = 10;
+	static constexpr size_t MAX_GROUPS = 15;
 	static constexpr size_t MAX_GROUP_NAME_LEN = 50;
 	static constexpr size_t MAX_PRESETS = 20;
 	static constexpr size_t MAX_PRESET_NAME_LEN = 50;
