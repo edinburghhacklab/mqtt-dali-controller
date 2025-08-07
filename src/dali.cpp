@@ -89,65 +89,73 @@ void Dali::setup() {
 }
 
 unsigned long Dali::run_tasks() {
-	const auto lights = config_.get_addresses();
-	unsigned long delay_ms = std::min(WATCHDOG_INTERVAL_MS,
-		std::max(TX_POWER_LEVEL_MS, REFRESH_PERIOD_MS / std::max(1U, lights.count())));
-	auto levels = lights_.get_levels();
+	const unsigned int num_lights = config_.get_addresses().count();
+	const unsigned long refresh_delay_ms = num_lights == 0
+		? ULONG_MAX : (REFRESH_PERIOD_MS / num_lights - TX_POWER_LEVEL_MS);
+	const unsigned long delay_ms = std::min(WATCHDOG_INTERVAL_MS, refresh_delay_ms);
 	bool changed = false;
+	bool refresh = true;
 
 	/*
 	 * Set power level for lights that have changed level, cycling through the
 	 * addresses each time to avoid preferring low-numbered lights.
 	 */
-	for (unsigned int i = 0; i <= MAX_ADDR && !changed; i++) {
-		unsigned address = next_address_;
+	do {
+		const auto lights = config_.get_addresses();
+		const auto levels = lights_.get_levels();
 
-		if (lights[address] && levels[address] != tx_levels_[address]) {
-			if (tx_power_level(address, levels[address])) {
-				tx_levels_[address] = levels[address];
-				delay_ms = TX_POWER_LEVEL_MS;
-				changed = true;
-			} else {
-				delay_ms = 0;
-				goto done;
+		changed = false;
+
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+				unsigned address = next_address_;
+
+			if (lights[address] && levels[address] != tx_levels_[address]) {
+				if (tx_power_level(address, levels[address])) {
+					tx_levels_[address] = levels[address];
+					changed = true;
+					refresh = false;
+				}
+
+				esp_task_wdt_reset();
 			}
-		}
 
-		next_address_++;
-		next_address_ %= MAX_ADDR + 1;
+			next_address_++;
+			next_address_ %= MAX_ADDR + 1;
+		}
+	} while (changed);
+
+	if (refresh) {
+		const auto lights = config_.get_addresses();
+		const auto levels = lights_.get_levels();
+
+		/*
+		* Refresh light power levels individually over a short time period,
+		* cycling through the addresses each time to avoid preferring
+		* low-numbered lights. Delays between lights keeps the bus idle most of
+		* the time to improve responsiveness when dimming with a rotary encoder.
+		*/
+		for (unsigned int i = 0; i <= MAX_ADDR && !changed; i++) {
+			unsigned address = next_address_;
+
+			if (lights[address]) {
+				if (tx_power_level(address, levels[address])) {
+					tx_levels_[address] = levels[address];
+					changed = true;
+				}
+
+				esp_task_wdt_reset();
+			}
+
+			next_address_++;
+			next_address_ %= MAX_ADDR + 1;
+		}
 	}
 
-	/*
-	* Refresh light power levels individually over a short time period,
-	* cycling through the addresses each time to avoid preferring
-	* low-numbered lights. Delays between lights keeps the bus idle most of
-	* the time to improve responsiveness when dimming with a rotary encoder.
-	*/
-	for (unsigned int i = 0; i <= MAX_ADDR && !changed; i++) {
-		unsigned address = next_address_;
-
-		if (lights[address]) {
-			if (tx_power_level(address, levels[address])) {
-				tx_levels_[address] = levels[address];
-				changed = true;
-			} else {
-				delay_ms = 0;
-				goto done;
-			}
-		}
-
-		next_address_++;
-		next_address_ %= MAX_ADDR + 1;
-	}
-
-done:
-	esp_task_wdt_reset();
 	return delay_ms;
 }
 
-bool Dali::ready() {
-	return rmt_wait_tx_done(static_cast<rmt_channel_t>(rmt_->channel),
-		TX_POWER_LEVEL_MS / portTICK_PERIOD_MS) == ESP_OK;
+bool Dali::async_ready() {
+	return rmt_wait_tx_done(static_cast<rmt_channel_t>(rmt_->channel), 0) == ESP_OK;
 }
 
 inline void Dali::push_byte(std::vector<rmt_data_t> &symbols, uint8_t value) {
@@ -157,15 +165,11 @@ inline void Dali::push_byte(std::vector<rmt_data_t> &symbols, uint8_t value) {
 }
 
 bool Dali::tx_idle() {
-	if (!ready()) {
-		return false;
-	}
-
-	//ESP_LOGE(TAG, "Idle");
+	ESP_LOGE(TAG, "Idle");
 
 	std::vector<rmt_data_t> symbols(1, DALI_STOP_IDLE);
 
-	return rmtWrite(rmt_, symbols.data(), symbols.size());
+	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }
 
 bool Dali::tx_power_level(uint8_t address, uint8_t level) {
@@ -173,11 +177,7 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 		return true;
 	}
 
-	if (!ready()) {
-		return false;
-	}
-
-	//ESP_LOGE(TAG, "Power level %u = %u", address, level);
+	ESP_LOGE(TAG, "Power level %u = %u", address, level);
 
 	std::vector<rmt_data_t> symbols;
 	symbols.reserve(START_BITS + 8 + 8 + 1);
@@ -187,7 +187,5 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	push_byte(symbols, level);
 	symbols.push_back(DALI_STOP_IDLE);
 
-	rmtWrite(rmt_, symbols.data(), symbols.size());
-	/* Always return success so we move on to the next light */
-	return true;
+	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }

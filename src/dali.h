@@ -65,7 +65,7 @@ private:
 
 	unsigned long run_tasks() override;
 
-	bool ready();
+	bool async_ready();
 	void push_byte(std::vector<rmt_data_t> &symbols, uint8_t value);
 	bool tx_idle();
 	bool tx_power_level(uint8_t address, uint8_t level);
