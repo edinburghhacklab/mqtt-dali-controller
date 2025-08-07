@@ -52,8 +52,6 @@ static bool startup_complete{false};
 static bool startup_watchdog{false};
 static bool startup_watchdog_failed{false};
 
-namespace cbor = qindesign::cbor;
-
 static void set_startup_complete(bool state) {
 	startup_complete = state;
 	lights.startup_complete(state);
