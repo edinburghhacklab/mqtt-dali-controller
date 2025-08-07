@@ -1,7 +1,7 @@
 # mqtt-dali-controller
 
 ## Overview
-Control DALI lights using an ESP32-S2 over MQTT.
+Control DALI lights using an ESP32-S3 over MQTT.
 
 ## Dependencies
 [PlatformIO](https://platformio.org/)
