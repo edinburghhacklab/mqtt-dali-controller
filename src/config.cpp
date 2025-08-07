@@ -249,6 +249,8 @@ bool ConfigFile::read_config(ConfigData &data) {
 }
 
 bool ConfigFile::read_config(const std::string &filename, bool load) {
+	uint64_t start = esp_timer_get_time();
+
 	ESP_LOGE(TAG, "Reading config file %s", filename.c_str());
 	const char mode[2] = {'r', '\0'};
 	auto file = FS.open(filename.c_str(), mode);
@@ -269,8 +271,10 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 
 				if (read_config(reader)) {
 					ESP_LOGE(TAG, "Loaded config from file %s", filename.c_str());
+					uint64_t finish = esp_timer_get_time();
 					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config", filename);
 					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
+					network_.publish(std::string{MQTT_TOPIC} + "/config_read_time_us", std::to_string(finish - start));
 				} else {
 					ESP_LOGE(TAG, "Invalid config file %s", filename.c_str());
 				}
@@ -678,6 +682,7 @@ bool ConfigFile::write_config(const ConfigData &data) {
 }
 
 bool ConfigFile::write_config(const std::string &filename) const {
+	uint64_t start = esp_timer_get_time();
 	ESP_LOGE(TAG, "Writing config file %s", filename.c_str());
 	{
 		const char mode[2] = {'w', '\0'};
@@ -703,8 +708,10 @@ bool ConfigFile::write_config(const std::string &filename) const {
 		auto file = FS.open(filename.c_str(), mode);
 		if (file) {
 			ESP_LOGE(TAG, "Saved config to file %s", filename.c_str());
+			uint64_t finish = esp_timer_get_time();
 			network_.publish(std::string{MQTT_TOPIC} + "/saved_config", filename);
 			network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
+			network_.publish(std::string{MQTT_TOPIC} + "/config_write_time_us", std::to_string(finish - start));
 			return true;
 		} else {
 			network_.report(TAG, std::string{"Unable to open config file "} + filename + " for reading");
