@@ -38,7 +38,7 @@ public:
 	uint64_t max_tx_us{0}; /**< Maximum duration of a transmitted command (µs) */
 	uint64_t tx_count{0}; /**< Number of transmitted commands */
 	uint64_t max_burst_tx_count{0}; /**< Maximum number of consecutively transmitted commands  */
-	uint64_t max_burst_us{0}; /**< Maximum runtime of consecutively transmitted commands */
+	uint64_t max_burst_us{0}; /**< Maximum runtime of consecutively transmitted commands (µs) */
 };
 
 class Dali: public WakeupThread {
