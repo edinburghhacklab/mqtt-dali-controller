@@ -169,7 +169,8 @@ dali/preset/<0-18446744073709551615> <<0-63>[-<0-63>]|group>
 ### Miscellaneous
 
 Statistics are output every 5 minutes. Responses are `dali/stats/#`, look at
-[`UI::publish_stats()`](src/ui.cpp) for more information.
+[`UI::publish_stats()`](src/ui.cpp) and [`class DaliStats`](src/dali.h) for more
+information.
 
 Reload config:
 ```
