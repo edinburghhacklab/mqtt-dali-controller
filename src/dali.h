@@ -69,17 +69,25 @@ private:
 	/**
 	 * Microchip Technology, AN1465 (2012)
 	 * Digitally Addressable Lighting Interface (DALI) Communication
-	 * Pages 3 to 6
+	 * Pages 2
 	 *
 	 * The bus is high when idle
 	 */
 	static constexpr auto BUS_ARDUINO_IDLE = BUS_ARDUINO_HIGH;
 	static constexpr unsigned int BUS_RMT_IDLE = BUS_RMT_HIGH;
 
+	/**
+	 * Microchip Technology, AN1465 (2012)
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * The half-bit time is 416.67µs ±10% (rounded up to better ensure the
+	 * minimum time between frames is met).
+	 */
 	static constexpr unsigned long BAUD_RATE = 1200;
 	static constexpr unsigned long TICK_NS = 1000UL;
-	static constexpr unsigned long HALF_SYMBOL_TICKS = 1000000000UL / TICK_NS / BAUD_RATE / 2;
-	static_assert(HALF_SYMBOL_TICKS == 416 /* µs */);
+	static constexpr unsigned long HALF_SYMBOL_TICKS = (1000000000UL / TICK_NS / BAUD_RATE + 1) / 2;
+	static_assert(HALF_SYMBOL_TICKS == 417 /* µs */);
 
 	static constexpr unsigned int START_BITS = 1;
 	static constexpr unsigned int STOP_BITS = 2;
@@ -87,7 +95,7 @@ private:
 
 	static constexpr unsigned long TX_POWER_LEVEL_TICKS = (START_BITS + 8 + 8 + STOP_BITS + IDLE_SYMBOLS) * HALF_SYMBOL_TICKS * 2;
 	static constexpr unsigned long TX_POWER_LEVEL_NS = TX_POWER_LEVEL_TICKS * TICK_NS;
-	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL;
+	static constexpr unsigned long TX_POWER_LEVEL_MS = TX_POWER_LEVEL_NS / 1000000UL;
 	static_assert(TX_POWER_LEVEL_MS == 25);
 
 	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;

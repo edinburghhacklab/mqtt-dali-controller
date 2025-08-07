@@ -21,6 +21,13 @@ The light switches are GPIO 11 and GPIO 12 (active low).
 Copy `src/fixed_config.h.example` to `src/fixed_config.h` to configure the WiFi
 network, MQTT hostname and MQTT topic (e.g. `dali`).
 
+### References
+
+* [Digitally Addressable Lighting Interface (DALI) Communication](https://ww1.microchip.com/downloads/en/AppNotes/01465A.pdf)
+* [Digitally Addressable Lighting Interface (DALI) Unit Using the MC68HC908KX8](https://www.nxp.com/docs/en/reference-manual/DRM004.pdf)
+* [Digital Addressable Lighting Interface (DALI) Implementation Using MSP430 Value Line Microcontrollers](https://www.ti.com/lit/an/slaa422a/slaa422a.pdf)
+* [DALI Communication Using the EFR32](https://www.silabs.com/documents/public/application-notes/an1220-efr32-dali.pdf)
+
 ## MQTT interface
 
 ### Lights
