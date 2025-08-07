@@ -64,11 +64,10 @@ private:
 	static constexpr unsigned int START_BITS = 1;
 	static constexpr unsigned int STOP_BITS = 2;
 	static constexpr unsigned int IDLE_SYMBOLS = 11;
-	static constexpr unsigned long TX_OVERHEAD_MS = 6;
 	static constexpr unsigned long TX_POWER_LEVEL_TICKS = (START_BITS + 8 + 8 + STOP_BITS + IDLE_SYMBOLS) * HALF_SYMBOL_TICKS * 2;
 	static constexpr unsigned long TX_POWER_LEVEL_NS = TX_POWER_LEVEL_TICKS * TICK_NS;
-	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL + TX_OVERHEAD_MS;
-	static_assert(TX_POWER_LEVEL_MS == 25 + TX_OVERHEAD_MS);
+	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL;
+	static_assert(TX_POWER_LEVEL_MS == 25);
 	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 
