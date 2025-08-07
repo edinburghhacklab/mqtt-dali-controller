@@ -26,7 +26,7 @@
 #include <esp_timer.h>
 
 #include <algorithm>
-#include <vector>
+#include <array>
 
 #include "config.h"
 #include "lights.h"
@@ -49,17 +49,22 @@ struct rmt_obj_s {
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 
-const rmt_data_t Dali::DALI_0 = {{{
+/*
+ * Microchip Technology, AN1465
+ * Digitally Addressable Lighting Interface (DALI) Communication
+ * Pages 3 to 6
+ */
+DRAM_ATTR const rmt_data_t Dali::DALI_0 = {{{
 	.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_LOW,
 	.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_HIGH,
 }}};
 
-const rmt_data_t Dali::DALI_1 = {{{
+DRAM_ATTR const rmt_data_t Dali::DALI_1 = {{{
 	.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_HIGH,
 	.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_LOW,
 }}};
 
-const rmt_data_t Dali::DALI_STOP_IDLE = {{{
+DRAM_ATTR const rmt_data_t Dali::DALI_STOP_IDLE = {{{
 	/* Stop bits */
 	.duration0 = HALF_SYMBOL_TICKS * STOP_BITS * 2, .level0 = BUS_RMT_HIGH,
 	/* Minimum idle time */
@@ -89,9 +94,9 @@ void Dali::setup() {
 }
 
 unsigned long Dali::run_tasks() {
-	const unsigned int num_lights = config_.get_addresses().count();
+	const unsigned long num_lights = config_.get_addresses().count();
 	const unsigned long refresh_delay_ms = num_lights == 0
-		? ULONG_MAX : (REFRESH_PERIOD_MS / num_lights - TX_POWER_LEVEL_MS);
+		? ULONG_MAX : std::max(0UL, REFRESH_PERIOD_MS / num_lights - TX_POWER_LEVEL_MS);
 	const unsigned long delay_ms = std::min(WATCHDOG_INTERVAL_MS, refresh_delay_ms);
 	bool changed = false;
 	bool refresh = true;
@@ -158,16 +163,18 @@ bool Dali::async_ready() {
 	return rmt_wait_tx_done(static_cast<rmt_channel_t>(rmt_->channel), 0) == ESP_OK;
 }
 
-inline void Dali::push_byte(std::vector<rmt_data_t> &symbols, uint8_t value) {
+inline size_t Dali::byte_to_symbols(rmt_data_t *symbols, uint8_t value) {
 	for (int i = 7; i >= 0; i--) {
-		symbols.push_back(((value >> i) & 1) ? DALI_1 : DALI_0);
+		*symbols = (((value >> i) & 1) ? DALI_1 : DALI_0);
+		symbols++;
 	}
+	return 8;
 }
 
 bool Dali::tx_idle() {
 	ESP_LOGE(TAG, "Idle");
 
-	std::vector<rmt_data_t> symbols(1, DALI_STOP_IDLE);
+	std::array<rmt_data_t,1> symbols{DALI_STOP_IDLE};
 
 	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }
@@ -179,13 +186,18 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 
 	ESP_LOGE(TAG, "Power level %u = %u", address, level);
 
-	std::vector<rmt_data_t> symbols;
-	symbols.reserve(START_BITS + 8 + 8 + 1);
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Pages 3 to 6
+	 */
+	std::array<rmt_data_t,1 + 8 + 8 + 1> symbols;
+	size_t i = 0;
 
-	symbols.push_back(DALI_1);
-	push_byte(symbols, address << 1);
-	push_byte(symbols, level);
-	symbols.push_back(DALI_STOP_IDLE);
+	symbols[i++] = DALI_1;
+	i += byte_to_symbols(&symbols[i], address << 1);
+	i += byte_to_symbols(&symbols[i], level);
+	symbols[i++] = DALI_STOP_IDLE;
 
 	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }

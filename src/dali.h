@@ -50,23 +50,25 @@ private:
 	static constexpr unsigned int START_BITS = 1;
 	static constexpr unsigned int STOP_BITS = 2;
 	static constexpr unsigned int IDLE_SYMBOLS = 11;
+	static constexpr unsigned long TX_OVERHEAD_MS = 6;
 	static constexpr unsigned long TX_POWER_LEVEL_TICKS = (START_BITS + 8 + 8 + STOP_BITS + IDLE_SYMBOLS) * HALF_SYMBOL_TICKS * 2;
 	static constexpr unsigned long TX_POWER_LEVEL_NS = TX_POWER_LEVEL_TICKS * TICK_NS;
-	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL;
-	static_assert(TX_POWER_LEVEL_MS == 25);
+	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL + TX_OVERHEAD_MS;
+	static_assert(TX_POWER_LEVEL_MS == 25 + TX_OVERHEAD_MS);
 	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 
-	static const rmt_data_t DALI_0;
-	static const rmt_data_t DALI_1;
-	static const rmt_data_t DALI_STOP_IDLE;
+	DRAM_ATTR static const rmt_data_t DALI_0;
+	DRAM_ATTR static const rmt_data_t DALI_1;
+	DRAM_ATTR static const rmt_data_t DALI_STOP_IDLE;
+
+	static size_t byte_to_symbols(rmt_data_t *symbols, uint8_t value);
 
 	~Dali() = delete;
 
 	unsigned long run_tasks() override;
 
 	bool async_ready();
-	void push_byte(std::vector<rmt_data_t> &symbols, uint8_t value);
 	bool tx_idle();
 	bool tx_power_level(uint8_t address, uint8_t level);
 
