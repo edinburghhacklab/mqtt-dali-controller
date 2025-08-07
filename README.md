@@ -17,6 +17,8 @@ The DALI interface is on GPIO 16 (RX) and 18 (TX).
 
 The light switches are GPIO 11 and GPIO 12 (active low).
 
+* [PCB](https://github.com/edinburghhacklab/dali-pcb)
+
 ## Network interface
 Copy `src/fixed_config.h.example` to `src/fixed_config.h` to configure the WiFi
 network, MQTT hostname and MQTT topic (e.g. `dali`).
