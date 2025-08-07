@@ -37,6 +37,9 @@ public:
 
 	void setup();
 
+	using WakeupThread::wake_up;
+	using WakeupThread::wake_up_isr;
+
 private:
 	static constexpr const char *TAG = "DALI";
 	static constexpr auto BUS_ARDUINO_LOW = HIGH;

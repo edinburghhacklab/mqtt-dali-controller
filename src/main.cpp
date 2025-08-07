@@ -99,6 +99,9 @@ void setup() {
 	switches.setup();
 	ui.setup();
 
+	config.set_dali(dali);
+	lights.set_dali(dali);
+
 	network.setup([] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string group_prefix = "/group/";
 		static const std::string preset_prefix = "/preset/";

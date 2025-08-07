@@ -38,6 +38,7 @@ class Lights {
 public:
 	Lights(Network &network, const Config &config);
 
+	void set_dali(Dali &dali);
 	void loop();
 	void startup_complete(bool state);
 	void address_config_changed();
@@ -71,6 +72,7 @@ private:
 
 	Network &network_;
 	const Config &config_;
+	Dali *dali_;
 
 	mutable std::recursive_mutex lights_mutex_;
 	std::array<uint8_t,MAX_ADDR+1> levels_{};

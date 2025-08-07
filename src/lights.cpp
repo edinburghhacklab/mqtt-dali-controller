@@ -47,6 +47,10 @@ Lights::Lights(Network &network, const Config &config)
 	load_rtc_state();
 }
 
+void Lights::set_dali(Dali &dali) {
+	dali_ = &dali;
+}
+
 void Lights::loop() {
 	if (startup_complete_ && network_.connected()) {
 		publish_levels(false);
@@ -185,6 +189,10 @@ void Lights::select_preset(std::string name, const std::string &lights, bool int
 	if (changed) {
 		save_rtc_state();
 
+		if (dali_) {
+			dali_->wake_up();
+		}
+
 		if (!internal) {
 			network_.report(TAG, config_.lights_text(light_ids) + " = " + name + (idle_only ? " (idle only)" : ""));
 		}
@@ -224,12 +232,15 @@ void Lights::set_level(const std::string &lights, long level) {
 	last_activity_us_ = esp_timer_get_time();
 
 	if (!changed) {
-		return;
-	}
+		save_rtc_state();
 
-	save_rtc_state();
-	network_.report(TAG, config_.lights_text(light_ids) + " = " + std::to_string(level));
-	publish_levels(true);
+		if (dali_) {
+			dali_->wake_up();
+		}
+
+		network_.report(TAG, config_.lights_text(light_ids) + " = " + std::to_string(level));
+		publish_levels(true);
+	}
 }
 
 void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
