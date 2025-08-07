@@ -70,9 +70,9 @@ DRAM_ATTR const rmt_data_t Dali::DALI_1 = {{{
 
 DRAM_ATTR const rmt_data_t Dali::DALI_STOP_IDLE = {{{
 	/* Stop bits */
-	.duration0 = HALF_SYMBOL_TICKS * STOP_BITS * 2, .level0 = BUS_RMT_HIGH,
+	.duration0 = HALF_SYMBOL_TICKS * STOP_BITS * 2, .level0 = BUS_RMT_IDLE,
 	/* Minimum idle time */
-	.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_HIGH,
+	.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_IDLE,
 }}};
 
 Dali::Dali(const Config &config, const Lights &lights)
@@ -84,9 +84,19 @@ Dali::Dali(const Config &config, const Lights &lights)
 void Dali::setup() {
 	pinMode(RX_GPIO, INPUT);
 	pinMode(TX_GPIO, OUTPUT);
-	digitalWrite(TX_GPIO, BUS_ARDUINO_HIGH);
+	digitalWrite(TX_GPIO, BUS_ARDUINO_IDLE);
 
-	/* Idle state defaults to low, which is BUS_RMT_HIGH */
+	/*
+	 * github:espressif/arduino-esp32 cores/esp32/esp32-hal-rmt.h v2.0.17
+	 *
+	 * RMT_DEFAULT_ARD_CONFIG_TX(...) = {
+	 *   .tx_config = {
+	 *     .idle_level = RMT_IDLE_LEVEL_LOW,
+	 *     .idle_output_en = true,
+	 * }
+	 *
+	 * Idle state defaults to 0 (LOW), which is BUS_RMT_IDLE (HIGH)
+	 */
 	rmt_ = rmtInit(TX_GPIO, RMT_TX_MODE, RMT_MEM_256);
 	static_assert((uint32_t)(1000/12.5f) == 80U);
 	rmtSetTick(rmt_, TICK_NS);
@@ -216,6 +226,17 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	 * Microchip Technology, AN1465
 	 * Digitally Addressable Lighting Interface (DALI) Communication
 	 * Pages 3 to 6
+	 *
+	 * 1 - Start bit (1 bit: 1)
+	 *
+	 * 8 - Short address (1 bit: 0)
+	 *     Address (6 bits)
+	 *     Selector: direct arc power level (1 bit: 0)
+	 *
+	 * 8 - Power level (8 bits)
+	 *
+	 * 1 - Stop bits (2 bits: idle)
+	 *     Time between consecutive forward frames (11 bits: idle)
 	 */
 	std::array<rmt_data_t,1 + 8 + 8 + 1> symbols;
 	size_t i = 0;

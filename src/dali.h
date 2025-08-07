@@ -53,21 +53,43 @@ public:
 
 private:
 	static constexpr const char *TAG = "DALI";
+
+	/**
+	 * Texas Instruments, SLAA422A (2012-10)
+	 * Digital Addressable Lighting Interface (DALI) Implementation Using MSP430 Value Line Microcontrollers
+	 * Page 6
+	 *
+	 * The signal from the DALI bus is inverted by the optocoupler
+	 */
 	static constexpr auto BUS_ARDUINO_LOW = HIGH;
 	static constexpr auto BUS_ARDUINO_HIGH = LOW;
 	static constexpr unsigned int BUS_RMT_LOW = 1;
 	static constexpr unsigned int BUS_RMT_HIGH = 0;
+
+	/**
+	 * Microchip Technology, AN1465 (2012)
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Pages 3 to 6
+	 *
+	 * The bus is high when idle
+	 */
+	static constexpr auto BUS_ARDUINO_IDLE = BUS_ARDUINO_HIGH;
+	static constexpr unsigned int BUS_RMT_IDLE = BUS_RMT_HIGH;
+
 	static constexpr unsigned long BAUD_RATE = 1200;
 	static constexpr unsigned long TICK_NS = 1000UL;
 	static constexpr unsigned long HALF_SYMBOL_TICKS = 1000000000UL / TICK_NS / BAUD_RATE / 2;
 	static_assert(HALF_SYMBOL_TICKS == 416 /* µs */);
+
 	static constexpr unsigned int START_BITS = 1;
 	static constexpr unsigned int STOP_BITS = 2;
 	static constexpr unsigned int IDLE_SYMBOLS = 11;
+
 	static constexpr unsigned long TX_POWER_LEVEL_TICKS = (START_BITS + 8 + 8 + STOP_BITS + IDLE_SYMBOLS) * HALF_SYMBOL_TICKS * 2;
 	static constexpr unsigned long TX_POWER_LEVEL_NS = TX_POWER_LEVEL_TICKS * TICK_NS;
 	static constexpr unsigned long TX_POWER_LEVEL_MS = (TX_POWER_LEVEL_NS + 999999UL) / 1000000UL;
 	static_assert(TX_POWER_LEVEL_MS == 25);
+
 	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 
