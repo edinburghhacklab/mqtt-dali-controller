@@ -57,6 +57,8 @@ static const std::string BACKUP_FILENAME = "/config.cbor~";
 
 namespace cbor = qindesign::cbor;
 
+#define CFG_LOG ESP_LOGD
+
 static std::string quoted_string(const std::string &text) {
 	if (text.empty()) {
 		return "`(null)`";
@@ -251,7 +253,7 @@ bool ConfigFile::read_config(ConfigData &data) {
 bool ConfigFile::read_config(const std::string &filename, bool load) {
 	uint64_t start = esp_timer_get_time();
 
-	ESP_LOGE(TAG, "Reading config file %s", filename.c_str());
+	CFG_LOG(TAG, "Reading config file %s", filename.c_str());
 	const char mode[2] = {'r', '\0'};
 	auto file = FS.open(filename.c_str(), mode);
 	if (file) {
@@ -259,30 +261,30 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 
 		if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag)
 				|| !reader.isWellFormed()) {
-			ESP_LOGE(TAG, "Failed to parse config file %s", filename.c_str());
+			CFG_LOG(TAG, "Failed to parse config file %s", filename.c_str());
 			return false;
 		} else {
 			if (load) {
-				ESP_LOGE(TAG, "Loading config from file %s", filename.c_str());
+				CFG_LOG(TAG, "Loading config from file %s", filename.c_str());
 				file.seek(0);
 
 				if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag))
 					return false;
 
 				if (read_config(reader)) {
-					ESP_LOGE(TAG, "Loaded config from file %s", filename.c_str());
+					CFG_LOG(TAG, "Loaded config from file %s", filename.c_str());
 					uint64_t finish = esp_timer_get_time();
 					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config", filename);
 					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 					network_.publish(std::string{MQTT_TOPIC} + "/config_read_time_us", std::to_string(finish - start));
 				} else {
-					ESP_LOGE(TAG, "Invalid config file %s", filename.c_str());
+					CFG_LOG(TAG, "Invalid config file %s", filename.c_str());
 				}
 			}
 			return true;
 		}
 	} else {
-		ESP_LOGE(TAG, "Config file %s does not exist", filename.c_str());
+		CFG_LOG(TAG, "Config file %s does not exist", filename.c_str());
 		return false;
 	}
 }
@@ -309,7 +311,7 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 				return false;
 			}
 
-			ESP_LOGE(TAG, "Lights = %s", Config::addresses_text(data_.lights).c_str());
+			CFG_LOG(TAG, "Lights = %s", Config::addresses_text(data_.lights).c_str());
 		} else if (key == "groups") {
 			if (!read_config_groups(reader)) {
 				return false;
@@ -327,7 +329,7 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE(TAG, "Unknown key: %s", key.c_str());
+			CFG_LOG(TAG, "Unknown key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -406,7 +408,7 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE(TAG, "Unknown group key: %s", key.c_str());
+			CFG_LOG(TAG, "Unknown group key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -418,13 +420,13 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 		auto result = data_.groups.emplace(name, std::move(lights));
 
 		if (result.second) {
-			ESP_LOGE(TAG, "Group %s = %s", name.c_str(),
+			CFG_LOG(TAG, "Group %s = %s", name.c_str(),
 				Config::addresses_text(result.first->second).c_str());
 		} else {
-			ESP_LOGE(TAG, "Ignoring duplicate group: %s", name.c_str());
+			CFG_LOG(TAG, "Ignoring duplicate group: %s", name.c_str());
 		}
 	} else {
-		ESP_LOGE(TAG, "Ignoring invalid group: %s", name.c_str());
+		CFG_LOG(TAG, "Ignoring invalid group: %s", name.c_str());
 	}
 
 	return true;
@@ -478,7 +480,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			ESP_LOGE(TAG, "Switch %u name = %s", switch_id, name.c_str());
+			CFG_LOG(TAG, "Switch %u name = %s", switch_id, name.c_str());
 			data_.switches[switch_id].name = std::move(name);
 		} else if (key == "group") {
 			std::string group;
@@ -488,10 +490,10 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 
 			if (Config::valid_group_name(group)) {
-				ESP_LOGE(TAG, "Switch %u group = %s", switch_id, group.c_str());
+				CFG_LOG(TAG, "Switch %u group = %s", switch_id, group.c_str());
 				data_.switches[switch_id].group = std::move(group);
 			} else {
-				ESP_LOGE(TAG, "Switch %u invalid group ignored: %s", switch_id, group.c_str());
+				CFG_LOG(TAG, "Switch %u invalid group ignored: %s", switch_id, group.c_str());
 			}
 		} else if (key == "preset") {
 			std::string preset;
@@ -501,13 +503,13 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 
 			if (Config::valid_preset_name(preset, true)) {
-				ESP_LOGE(TAG, "Switch %u preset = %s", switch_id, preset.c_str());
+				CFG_LOG(TAG, "Switch %u preset = %s", switch_id, preset.c_str());
 				data_.switches[switch_id].preset = std::move(preset);
 			} else {
-				ESP_LOGE(TAG, "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
+				CFG_LOG(TAG, "Switch %u invalid preset ignored: %s", switch_id, preset.c_str());
 			}
 		} else {
-			ESP_LOGE(TAG, "Unknown switch %u key: %s", switch_id, key.c_str());
+			CFG_LOG(TAG, "Unknown switch %u key: %s", switch_id, key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -563,7 +565,7 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 				return false;
 			}
 		} else {
-			ESP_LOGE(TAG, "Unknown preset key: %s", key.c_str());
+			CFG_LOG(TAG, "Unknown preset key: %s", key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -575,13 +577,13 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 		auto result = data_.presets.emplace(name, std::move(levels));
 
 		if (result.second) {
-			ESP_LOGE(TAG, "Preset %s = %s", name.c_str(),
+			CFG_LOG(TAG, "Preset %s = %s", name.c_str(),
 				Config::preset_levels_text(result.first->second, nullptr).c_str());
 		} else {
-			ESP_LOGE(TAG, "Ignoring duplicate preset: %s", name.c_str());
+			CFG_LOG(TAG, "Ignoring duplicate preset: %s", name.c_str());
 		}
 	} else {
-		ESP_LOGE(TAG, "Ignoring invalid preset: %s", name.c_str());
+		CFG_LOG(TAG, "Ignoring invalid preset: %s", name.c_str());
 	}
 
 	return true;
@@ -630,10 +632,10 @@ bool ConfigFile::read_config_order(cbor::Reader &reader) {
 		}
 
 		if (Config::valid_preset_name(preset, true)) {
-			ESP_LOGE(TAG, "Ordered preset %zu: %s", data_.ordered.size(), preset.c_str());
+			CFG_LOG(TAG, "Ordered preset %zu: %s", data_.ordered.size(), preset.c_str());
 			data_.ordered.push_back(std::move(preset));
 		} else {
-			ESP_LOGE(TAG, "Ignoring invalid preset: %s", preset.c_str());
+			CFG_LOG(TAG, "Ignoring invalid preset: %s", preset.c_str());
 		}
 	}
 
@@ -683,7 +685,7 @@ bool ConfigFile::write_config(const ConfigData &data) {
 
 bool ConfigFile::write_config(const std::string &filename) const {
 	uint64_t start = esp_timer_get_time();
-	ESP_LOGE(TAG, "Writing config file %s", filename.c_str());
+	CFG_LOG(TAG, "Writing config file %s", filename.c_str());
 	{
 		const char mode[2] = {'w', '\0'};
 		auto file = FS.open(filename.c_str(), mode);
@@ -707,7 +709,7 @@ bool ConfigFile::write_config(const std::string &filename) const {
 		const char mode[2] = {'r', '\0'};
 		auto file = FS.open(filename.c_str(), mode);
 		if (file) {
-			ESP_LOGE(TAG, "Saved config to file %s", filename.c_str());
+			CFG_LOG(TAG, "Saved config to file %s", filename.c_str());
 			uint64_t finish = esp_timer_get_time();
 			network_.publish(std::string{MQTT_TOPIC} + "/saved_config", filename);
 			network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
@@ -922,12 +924,12 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 
 	if (before != after) {
 		if (group == BUILTIN_GROUP_ALL) {
-			ESP_LOGE(TAG, "Configure light addresses: %s", addresses.c_str());
+			CFG_LOG(TAG, "Configure light addresses: %s", addresses.c_str());
 			network_.publish(std::string{MQTT_TOPIC} + "/addresses", after, true);
 			network_.report(TAG, std::string{"Addresses: "}
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		} else {
-			ESP_LOGE(TAG, "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
+			CFG_LOG(TAG, "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
 			network_.publish(std::string{MQTT_TOPIC} + "/group/" + group, after, true);
 			network_.report(TAG, std::string{"Group "} + group + " addresses: "
 				+ quoted_string(before) + " -> " + quoted_string(after));
@@ -945,7 +947,7 @@ void Config::delete_group(const std::string &name) {
 		return;
 	}
 
-	ESP_LOGE(TAG, "Delete group %s", name.c_str());
+	CFG_LOG(TAG, "Delete group %s", name.c_str());
 	network_.report(TAG, std::string{"Group "} + name + ": "
 		+ quoted_string(group_addresses_text(name)) + " (deleted)");
 
