@@ -101,9 +101,27 @@ private:
 	static constexpr unsigned long REFRESH_PERIOD_MS = 5000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 
-	DRAM_ATTR static const rmt_data_t DALI_0;
-	DRAM_ATTR static const rmt_data_t DALI_1;
-	DRAM_ATTR static const rmt_data_t DALI_STOP_IDLE;
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Pages 3 to 6
+	 */
+	DRAM_ATTR static constexpr const rmt_data_t DALI_0{{{
+		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_LOW,
+		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_HIGH,
+	}}};
+
+	DRAM_ATTR static constexpr const rmt_data_t DALI_1{{{
+		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_HIGH,
+		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_LOW,
+	}}};
+
+	DRAM_ATTR static constexpr const rmt_data_t DALI_STOP_IDLE{{{
+		/* Stop bits */
+		.duration0 = HALF_SYMBOL_TICKS * STOP_BITS * 2, .level0 = BUS_RMT_IDLE,
+		/* Minimum idle time */
+		.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_IDLE,
+	}}};
 
 	static size_t byte_to_symbols(rmt_data_t *symbols, uint8_t value);
 

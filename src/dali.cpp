@@ -53,28 +53,6 @@ struct rmt_obj_s {
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 
-/*
- * Microchip Technology, AN1465
- * Digitally Addressable Lighting Interface (DALI) Communication
- * Pages 3 to 6
- */
-DRAM_ATTR const rmt_data_t Dali::DALI_0 = {{{
-	.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_LOW,
-	.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_HIGH,
-}}};
-
-DRAM_ATTR const rmt_data_t Dali::DALI_1 = {{{
-	.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_HIGH,
-	.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_LOW,
-}}};
-
-DRAM_ATTR const rmt_data_t Dali::DALI_STOP_IDLE = {{{
-	/* Stop bits */
-	.duration0 = HALF_SYMBOL_TICKS * STOP_BITS * 2, .level0 = BUS_RMT_IDLE,
-	/* Minimum idle time */
-	.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_IDLE,
-}}};
-
 Dali::Dali(const Config &config, const Lights &lights)
 		: WakeupThread("dali", true), config_(config),
 		lights_(lights) {
