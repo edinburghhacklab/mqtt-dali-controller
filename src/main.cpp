@@ -126,6 +126,8 @@ void setup() {
 				config.publish_config();
 			}
 		} else if (topic_str == "/reboot") {
+			config.save_config();
+
 			std::lock_guard lock{file_mutex};
 
 			esp_restart();
