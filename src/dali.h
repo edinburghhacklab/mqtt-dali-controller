@@ -107,13 +107,13 @@ private:
 	 * Pages 3 to 6
 	 */
 	DRAM_ATTR static constexpr const rmt_data_t DALI_0{{{
-		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_LOW,
-		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_HIGH,
+		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_HIGH,
+		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_LOW,
 	}}};
 
 	DRAM_ATTR static constexpr const rmt_data_t DALI_1{{{
-		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_HIGH,
-		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_LOW,
+		.duration0 = HALF_SYMBOL_TICKS, .level0 = BUS_RMT_LOW,
+		.duration1 = HALF_SYMBOL_TICKS, .level1 = BUS_RMT_HIGH,
 	}}};
 
 	DRAM_ATTR static constexpr const rmt_data_t DALI_STOP_IDLE{{{
