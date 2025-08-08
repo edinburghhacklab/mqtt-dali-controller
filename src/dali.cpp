@@ -25,6 +25,7 @@
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 
+#include <cassert>
 #include <algorithm>
 #include <array>
 #include <mutex>
@@ -223,6 +224,7 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	i += byte_to_symbols(&symbols[i], address << 1);
 	i += byte_to_symbols(&symbols[i], level);
 	symbols[i++] = DALI_STOP_IDLE;
+	assert(i == symbols.size());
 
 	bool ret = rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 	uint64_t finish = esp_timer_get_time();
