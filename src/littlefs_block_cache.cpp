@@ -69,10 +69,8 @@ static int read(const struct lfs_config *c,
 		lfs_block_t block, lfs_off_t off, uint8_t *buffer, lfs_size_t size) {
 	init(c);
 
-	while (off >= FILESYSTEM_BLOCK_SIZE) {
-		off -= FILESYSTEM_BLOCK_SIZE;
-		block++;
-	}
+	block += off / FILESYSTEM_BLOCK_SIZE;
+	off %= FILESYSTEM_BLOCK_SIZE;
 
 	while (size > 0) {
 		size_t available = std::min(FILESYSTEM_BLOCK_SIZE - off, size);
@@ -122,10 +120,8 @@ static void evict(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, 
 	if (used_cache_size == 0)
 		return;
 
-	while (off >= FILESYSTEM_BLOCK_SIZE) {
-		off -= FILESYSTEM_BLOCK_SIZE;
-		block++;
-	}
+	block += off / FILESYSTEM_BLOCK_SIZE;
+	off %= FILESYSTEM_BLOCK_SIZE;
 
 	while (size > 0) {
 		size_t available = std::min(FILESYSTEM_BLOCK_SIZE - off, size);
