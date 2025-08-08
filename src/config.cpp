@@ -115,7 +115,10 @@ ConfigFile::ConfigFile(Network &network) : network_(network) {
 }
 
 void Config::setup() {
-	FS.begin(true);
+	if (!FS.begin(true)) {
+		ESP_LOGE(TAG, "Filesystem failed to start");
+		esp_restart();
+	}
 	load_config();
 }
 
@@ -261,7 +264,7 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 
 		if (!cbor::expectValue(reader, cbor::DataType::kTag, cbor::kSelfDescribeTag)
 				|| !reader.isWellFormed()) {
-			CFG_LOG(TAG, "Failed to parse config file %s", filename.c_str());
+			ESP_LOGE(TAG, "Failed to parse config file %s", filename.c_str());
 			return false;
 		} else {
 			if (load) {
@@ -278,13 +281,13 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
 					network_.publish(std::string{MQTT_TOPIC} + "/config_read_time_us", std::to_string(finish - start));
 				} else {
-					CFG_LOG(TAG, "Invalid config file %s", filename.c_str());
+					ESP_LOGE(TAG, "Invalid config file %s", filename.c_str());
 				}
 			}
 			return true;
 		}
 	} else {
-		CFG_LOG(TAG, "Config file %s does not exist", filename.c_str());
+		ESP_LOGE(TAG, "Config file %s does not exist", filename.c_str());
 		return false;
 	}
 }
