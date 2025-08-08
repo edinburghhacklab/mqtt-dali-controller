@@ -109,7 +109,7 @@ class Config {
 public:
 	explicit Config(std::mutex &file_mutex, Network &network);
 
-	static bool valid_group_name(const std::string &name);
+	static bool valid_group_name(const std::string &name, bool use = false);
 	static bool valid_preset_name(const std::string &name, bool use = false);
 	static std::string addresses_text(const std::bitset<MAX_ADDR+1> &addresses);
 	static std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,

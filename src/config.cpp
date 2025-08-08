@@ -126,8 +126,8 @@ void Config::loop() {
 	save_config();
 }
 
-bool Config::valid_group_name(const std::string &name) {
-	if (name == BUILTIN_GROUP_ALL
+bool Config::valid_group_name(const std::string &name, bool use) {
+	if ((name == BUILTIN_GROUP_ALL && !use)
 			|| name == BUILTIN_GROUP_IDLE
 			|| name == RESERVED_GROUP_DELETE
 			|| name == RESERVED_GROUP_LEVELS
@@ -492,7 +492,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			if (Config::valid_group_name(group)) {
+			if (Config::valid_group_name(group, true)) {
 				CFG_LOG(TAG, "Switch %u group = %s", switch_id, group.c_str());
 				data_.switches[switch_id].group = std::move(group);
 			} else {
@@ -1005,7 +1005,7 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 	std::lock_guard lock{data_mutex_};
 
 	if (switch_id < NUM_SWITCHES) {
-		if (!valid_group_name(group)) {
+		if (!valid_group_name(group, true)) {
 			return;
 		}
 
