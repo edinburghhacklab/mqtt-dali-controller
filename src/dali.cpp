@@ -102,6 +102,8 @@ unsigned long Dali::run_tasks() {
 	bool changed = false;
 	bool refresh = true;
 
+	esp_task_wdt_reset();
+
 	uint64_t start = esp_timer_get_time();
 	uint64_t count = 0;
 	/*
