@@ -231,7 +231,7 @@ void Lights::set_level(const std::string &lights, long level) {
 
 	last_activity_us_ = esp_timer_get_time();
 
-	if (!changed) {
+	if (changed) {
 		save_rtc_state();
 
 		if (dali_) {
