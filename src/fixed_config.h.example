@@ -1,3 +1,4 @@
+static constexpr const char *WIFI_HOSTNAME = "dali";
 static constexpr const char *WIFI_SSID = "Example";
 static constexpr const char *WIFI_PASSWORD = "Password";
 static constexpr const char *MQTT_HOSTNAME = "mqtt.example";

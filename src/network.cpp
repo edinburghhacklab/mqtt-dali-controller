@@ -140,6 +140,14 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 	WiFi.setSleep(false);
 	WiFi.mode(WIFI_STA);
 
+	std::string hostname = WiFi.getHostname();
+	auto idx = hostname.find("-");
+	if (idx != std::string::npos) {
+		hostname = WIFI_HOSTNAME + hostname.substr(idx);
+		ESP_LOGE(TAG, "Hostname = %s", hostname.c_str());
+		WiFi.setHostname(hostname.c_str());
+	}
+
 	mqtt_.setServer(MQTT_HOSTNAME, MQTT_PORT);
 	mqtt_.setBufferSize(Message::BUFFER_SIZE);
 	mqtt_.setCallback(callback);
