@@ -22,6 +22,7 @@
 #include <esp_crc.h>
 #include <esp_timer.h>
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cerrno>
@@ -54,6 +55,11 @@ void Lights::set_dali(Dali &dali) {
 
 void Lights::loop() {
 	if (startup_complete_ && network_.connected()) {
+		std::bitset<MAX_ADDR+1> lights;
+
+		lights.set();
+
+		report_dimmed_levels(lights, DIM_REPORT_DELAY_US);
 		publish_levels(false);
 		publish_active_presets();
 	}
@@ -184,6 +190,8 @@ void Lights::select_preset(std::string name, const std::string &lights, bool int
 		return;
 	}
 
+	report_dimmed_levels(light_ids, 0);
+
 	for (int i = 0; i <= MAX_ADDR; i++) {
 		if (addresses[i]) {
 			if (preset_levels[i] != -1) {
@@ -238,6 +246,8 @@ void Lights::set_level(const std::string &lights, long level) {
 		return;
 	}
 
+	report_dimmed_levels(light_ids, 0);
+
 	for (int i = 0; i <= MAX_ADDR; i++) {
 		if (!addresses[i] || !light_ids[i]) {
 			continue;
@@ -273,6 +283,71 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 		power_on_ |= lights;
 	} else {
 		power_on_ &= ~lights;
+	}
+}
+
+void Lights::dim_adjust(const std::string &group, long level) {
+	if (level < -(long)MAX_LEVEL || level > (long)MAX_LEVEL) {
+		return;
+	}
+
+	const auto addresses = config_.get_addresses();
+	const auto lights = config_.get_group_addresses(group);
+	std::lock_guard publish_lock{publish_mutex_};
+	std::lock_guard lights_lock{lights_mutex_};
+	uint64_t now = esp_timer_get_time();
+	bool changed;
+
+	for (int i = 0; i <= MAX_ADDR; i++) {
+		if (!addresses[i] || !lights[i]) {
+			continue;
+		}
+
+		levels_[i] = std::max(0L, std::min((long)MAX_LEVEL, (long)levels_[i] + level));
+		dim_time_us_[i] = now;
+		republish_presets_.insert(active_presets_[i]);
+		active_presets_[i] = RESERVED_PRESET_CUSTOM;
+		republish_presets_.insert(active_presets_[i]);
+		changed = true;
+	}
+
+	last_activity_us_ = esp_timer_get_time();
+
+	if (changed) {
+		save_rtc_state();
+
+		if (dali_) {
+			dali_->wake_up();
+		}
+
+		publish_levels(true);
+	}
+}
+
+void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us) {
+	std::lock_guard lock{lights_mutex_};
+	std::bitset<MAX_ADDR+1> dimmed_lights;
+	uint8_t min_level = MAX_LEVEL;
+	uint8_t max_level = 0;
+	uint64_t now = esp_timer_get_time();
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (lights[i] && dim_time_us_[i] && now - dim_time_us_[i] >= time_us) {
+			dimmed_lights[i] = true;
+			min_level = std::min(min_level, levels_[i]);
+			max_level = std::max(max_level, levels_[i]);
+			dim_time_us_[i] = 0;
+		}
+	}
+
+	if (dimmed_lights.count()) {
+		if (min_level == max_level) {
+			network_.report(TAG, config_.lights_text(dimmed_lights) + " = "
+				+ std::to_string(min_level) + " (dimmer)");
+		} else {
+			network_.report(TAG, config_.lights_text(dimmed_lights) + " = "
+				+ std::to_string(min_level) + ".." + std::to_string(max_level) + " (dimmer)");
+		}
 	}
 }
 

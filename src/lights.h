@@ -53,11 +53,13 @@ public:
 	void select_preset(std::string name, const std::string &lights, bool internal = false);
 	void set_level(const std::string &lights, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
+	void dim_adjust(const std::string &group, long level);
 
 private:
 	static constexpr const char *TAG = "Lights";
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
 	static constexpr uint64_t IDLE_US = 10 * ONE_S;
+	static constexpr uint64_t DIM_REPORT_DELAY_US = 5 * ONE_S;
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
@@ -68,6 +70,7 @@ private:
 
 	void publish_active_presets();
 	void publish_levels(bool force);
+	void report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us);
 	bool is_idle();
 
 	void load_rtc_state();
@@ -85,6 +88,7 @@ private:
 	std::array<uint8_t,MAX_ADDR+1> levels_{};
 	std::bitset<MAX_ADDR+1> power_on_;
 	std::bitset<MAX_ADDR+1> power_known_;
+	std::array<uint64_t,MAX_ADDR+1> dim_time_us_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
 
