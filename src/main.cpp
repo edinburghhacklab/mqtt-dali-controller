@@ -45,9 +45,9 @@ static constexpr const char *TAG = "main";
 static std::mutex file_mutex;
 
 static Network network;
-static UI ui{file_mutex, network};
 static Config config{file_mutex, network};
 static Lights lights{network, config};
+static UI ui{file_mutex, network, lights};
 static bool startup_complete{false};
 static bool startup_watchdog{false};
 static bool startup_watchdog_failed{false};
@@ -100,6 +100,7 @@ void setup() {
 
 	lights.set_dali(dali);
 	ui.set_dali(dali);
+	ui.set_switches(switches);
 
 	network.setup([&dali] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string group_prefix = "/group/";

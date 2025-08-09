@@ -1,4 +1,5 @@
 /*
+ * mqtt-dali-controller
  * Copyright 2025  Simon Arlott
  *
  * This program is free software: you can redistribute it and/or modify
@@ -15,32 +16,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
 #include <Arduino.h>
 
-#include <memory>
+/*
+ * This file is sorted first so it will be linked first
+ *
+ * Add some padding at the start of the RTC noinit memory, because the uploader
+ * overwrites memory in this area
+ */
 
-static constexpr uint64_t ONE_S = 1000 * 1000ULL;
-static constexpr uint64_t ONE_M = 60 * ONE_S;
-static constexpr uint64_t FIVE_M = 5 * ONE_M;
+RTC_NOINIT_ATTR uint64_t rtc_padding;
 
-class MemoryDeleter {
-public:
-	void operator()(uint8_t *data) { ::free(data); }
-};
-
-using MemoryAllocation = std::unique_ptr<uint8_t, MemoryDeleter>;
-
-enum BootRTCStatus {
-	UNKNOWN,
-	POWER_ON_IGNORED,
-	CHECKSUM_MISMATCH,
-	LOADED_OK,
-};
-
-#if __has_include("fixed_config.h")
-# include "fixed_config.h"
-#else
-# include "fixed_config.h.example"
-#endif
+static void __attribute__((constructor(1000))) rtc_padding_init() {
+    rtc_padding = 0;
+}

@@ -23,6 +23,7 @@
 
 #include "debounce.h"
 #include "thread.h"
+#include "util.h"
 
 static constexpr unsigned int NUM_SWITCHES = 2;
 
@@ -42,12 +43,17 @@ class Switches: public WakeupThread {
 public:
 	Switches(Network &network, const Config &config, Lights &lights);
 
+	static std::string rtc_boot_memory();
+
 	void setup();
+
+	BootRTCStatus rtc_boot_status() const;
 
 private:
 	static constexpr const char *TAG = "Switches";
 	static constexpr unsigned long DEBOUNCE_US = 20 * 1000;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
+	static constexpr uint32_t RTC_MAGIC = 0xa75be95b;
 
 	~Switches() = delete;
 
@@ -66,6 +72,8 @@ private:
 	Network &network_;
 	const Config &config_;
 	Lights &lights_;
+	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
+
 	std::array<Debounce,NUM_SWITCHES> debounce_;
 	std::array<SwitchState,NUM_SWITCHES> state_;
 	bool using_rtc_state_{false};

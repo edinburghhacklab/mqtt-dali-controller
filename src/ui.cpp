@@ -31,7 +31,9 @@
 #include <string>
 
 #include "dali.h"
+#include "lights.h"
 #include "network.h"
+#include "switches.h"
 #include "util.h"
 
 extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
@@ -39,8 +41,8 @@ extern const uint8_t x509_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
 
 static constexpr auto &FS = LittleFS;
 
-UI::UI(std::mutex &file_mutex, Network &network)
-		: network_(network), file_mutex_(file_mutex) {
+UI::UI(std::mutex &file_mutex, Network &network, Lights &lights)
+		: network_(network), lights_(lights), file_mutex_(file_mutex) {
 }
 
 void UI::startup_complete(bool state) {
@@ -70,6 +72,17 @@ static const char *ota_state_string(esp_ota_img_states_t state) {
 	return "unknown";
 }
 
+static const char *boot_rtc_status_string(BootRTCStatus value) {
+	switch (value) {
+	case UNKNOWN: return "unknown";
+	case POWER_ON_IGNORED: return "power-on-ignored";
+	case CHECKSUM_MISMATCH: return "checksum-mismatch";
+	case LOADED_OK: return "loaded-ok";
+	}
+
+	return "invalid";
+}
+
 void UI::status_report() {
 	publish_application();
 	publish_boot();
@@ -93,6 +106,13 @@ void UI::publish_boot() {
 	network_.publish(topic + "/reset_reason/0", std::to_string(rtc_get_reset_reason(0)));
 	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)));
 	network_.publish(topic + "/wakeup_cause", std::to_string(rtc_get_wakeup_cause()));
+
+	network_.publish(topic + "/rtc/lights",
+		Lights::rtc_boot_memory() + " -> " + boot_rtc_status_string(lights_.rtc_boot_status()));
+	if (switches_) {
+		network_.publish(topic + "/rtc/switches",
+			Switches::rtc_boot_memory() + " -> " + boot_rtc_status_string(switches_->rtc_boot_status()));
+	}
 }
 
 void UI::publish_partitions() {
@@ -196,6 +216,10 @@ void UI::setup() {
 
 void UI::set_dali(Dali &dali) {
 	dali_ = &dali;
+}
+
+void UI::set_switches(Switches &switches) {
+	switches_ = &switches;
 }
 
 void UI::loop() {

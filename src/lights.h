@@ -38,9 +38,14 @@ class Lights {
 public:
 	Lights(Network &network, const Config &config);
 
+	static std::string rtc_boot_memory();
+
 	void set_dali(Dali &dali);
 	void loop();
 	void startup_complete(bool state);
+
+	BootRTCStatus rtc_boot_status() const;
+
 	void address_config_changed();
 	void address_config_changed(const std::string &group);
 
@@ -57,6 +62,7 @@ private:
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
 	static constexpr size_t RTC_LEVELS_SIZE = ((MAX_ADDR+1)+3)/4;
+	static constexpr uint32_t RTC_MAGIC = 0x0d1325ab;
 
 	static uint32_t rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels);
 
@@ -73,6 +79,7 @@ private:
 	Network &network_;
 	const Config &config_;
 	Dali *dali_;
+	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
 
 	mutable std::recursive_mutex lights_mutex_;
 	std::array<uint8_t,MAX_ADDR+1> levels_{};

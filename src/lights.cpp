@@ -29,6 +29,7 @@
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
+#include <vector>
 
 #include "config.h"
 #include "dali.h"
@@ -64,6 +65,20 @@ void Lights::startup_complete(bool state) {
 	startup_complete_ = state;
 }
 
+std::string Lights::rtc_boot_memory() {
+	std::vector<char> buffer(64);
+
+	snprintf(buffer.data(), buffer.size(), "%p+%zu, %p+%zu",
+		&rtc_crc_, sizeof(rtc_crc_),
+		rtc_levels_, sizeof(rtc_levels_));
+
+	return {buffer.data()};
+}
+
+BootRTCStatus Lights::rtc_boot_status() const {
+	return boot_rtc_;
+}
+
 void Lights::address_config_changed() {
 	std::lock_guard lock{publish_mutex_};
 	auto groups = config_.group_names();
@@ -88,12 +103,15 @@ bool Lights::is_idle() {
 }
 
 uint32_t Lights::rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels) {
-	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&levels), sizeof(levels));
+	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&levels), sizeof(levels)) ^ RTC_MAGIC;
 }
 
 void Lights::load_rtc_state() {
+	ESP_LOGE(TAG, "RTC state at %s", rtc_boot_memory().c_str());
+
 	if (esp_reset_reason() == ESP_RST_POWERON) {
 		ESP_LOGE(TAG, "Ignoring light levels in RTC memory, first power on");
+		boot_rtc_ = BootRTCStatus::POWER_ON_IGNORED;
 		return;
 	}
 
@@ -111,9 +129,12 @@ void Lights::load_rtc_state() {
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 			levels_[i] = (levels[i/4] >> (8 * (i % 4))) & 0xFFU;
 		}
+
+		boot_rtc_ = BootRTCStatus::LOADED_OK;
 	} else {
 		ESP_LOGE(TAG, "Ignoring light levels in RTC memory, checksum mismatch 0x%08X != 0x%08X",
 			rtc_crc_, expected_crc);
+		boot_rtc_ = BootRTCStatus::CHECKSUM_MISMATCH;
 	}
 }
 

@@ -56,6 +56,20 @@ void Switches::setup() {
 	t.detach();
 }
 
+std::string Switches::rtc_boot_memory() {
+	std::vector<char> buffer(64);
+
+	snprintf(buffer.data(), buffer.size(), "%p+%zu, %p+%zu",
+		&rtc_crc_, sizeof(rtc_crc_),
+		rtc_states_, sizeof(rtc_states_));
+
+	return {buffer.data()};
+}
+
+BootRTCStatus Switches::rtc_boot_status() const {
+	return boot_rtc_;
+}
+
 unsigned long Switches::run_tasks() {
 	unsigned long wait_ms = WATCHDOG_INTERVAL_MS;
 
@@ -125,12 +139,15 @@ void Switches::publish_switch(unsigned int switch_id, const std::string &group) 
 }
 
 uint32_t Switches::rtc_crc(const std::array<uint32_t,NUM_SWITCHES> &states) {
-	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&states), sizeof(states));
+	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&states), sizeof(states)) ^ RTC_MAGIC;
 }
 
 void Switches::load_rtc_state() {
+	ESP_LOGE(TAG, "RTC state at 0x%s", rtc_boot_memory().c_str());
+
 	if (esp_reset_reason() == ESP_RST_POWERON) {
 		ESP_LOGE(TAG, "Ignoring switch states in RTC memory, first power on");
+		boot_rtc_ = BootRTCStatus::POWER_ON_IGNORED;
 		return;
 	}
 
@@ -144,13 +161,17 @@ void Switches::load_rtc_state() {
 
 	if (rtc_crc_ == expected_crc) {
 		ESP_LOGE(TAG, "Restoring switch states from RTC memory");
+
 		for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 			state_[i].active = states[i];
 		}
+
 		using_rtc_state_ = true;
+		boot_rtc_ = BootRTCStatus::LOADED_OK;
 	} else {
 		ESP_LOGE(TAG, "Ignoring switch states in RTC memory, checksum mismatch 0x%08X != 0x%08X",
 			rtc_crc_, expected_crc);
+		boot_rtc_ = BootRTCStatus::CHECKSUM_MISMATCH;
 	}
 }
 

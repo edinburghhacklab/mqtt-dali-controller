@@ -22,14 +22,17 @@
 #include <mutex>
 
 class Dali;
+class Lights;
 class Network;
+class Switches;
 
 class UI {
 public:
-	UI(std::mutex &file_mutex, Network &network);
+	UI(std::mutex &file_mutex, Network &network, Lights &lights);
 
 	void setup();
 	void set_dali(Dali &dali);
+	void set_switches(Switches &switches);
 	void loop();
 	void startup_complete(bool state);
 	void status_report();
@@ -53,7 +56,9 @@ private:
 	void ota_result(bool good);
 
 	Network &network_;
+	Lights &lights_;
 	Dali *dali_;
+	Switches *switches_;
 	std::mutex &file_mutex_;
 	uint64_t last_publish_us_{0};
 	bool startup_complete_{false};
