@@ -537,7 +537,7 @@ bool ConfigFile::read_config_dimmers(cbor::Reader &reader) {
 	}
 
 	while (length-- > 0) {
-		if (i < NUM_SWITCHES) {
+		if (i < NUM_DIMMERS) {
 			if (!read_config_dimmer(reader, i)) {
 				return false;
 			}
