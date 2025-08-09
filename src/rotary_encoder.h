@@ -46,7 +46,8 @@ private:
 
 	WakeupThread *wakeup_{nullptr};
 	const std::array<gpio_num_t,2> pins_;
-    bool state_[2];
+	bool state_[2];
+	int first_{-1};
 
-    std::atomic<long> change_{0};
+	std::atomic<long> change_{0};
 };

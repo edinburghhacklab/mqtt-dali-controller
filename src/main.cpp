@@ -90,12 +90,14 @@ void setup() {
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1));
 
 	Switches &switches = *new Switches{network, config, lights};
+	Dimmers &dimmers = *new Dimmers{config, lights};
 	Dali &dali = *new Dali{config, lights};
 
 	dali.setup();
 	config.setup();
 	dali.wake_up();
 	switches.setup();
+	dimmers.setup();
 	ui.setup();
 
 	lights.set_dali(dali);

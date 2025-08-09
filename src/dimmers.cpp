@@ -77,7 +77,8 @@ void Dimmers::run_dimmer(unsigned int dimmer_id) {
 	if (encoder_steps == 0) {
 		state_[dimmer_id].encoder_steps = 0;
 	} else {
-		state_[dimmer_id].encoder_steps += encoder_change;
+		state_[dimmer_id].encoder_steps = std::max(-LONG_MAX,
+			state_[dimmer_id].encoder_steps + encoder_change);
 	}
 
 	if (state_[dimmer_id].encoder_steps == 0) {

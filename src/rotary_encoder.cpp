@@ -18,7 +18,9 @@
 
 #include "rotary_encoder.h"
 
+#include <Arduino.h>
 #include <driver/gpio.h>
+#include <esp_log.h>
 
 #include <atomic>
 #include <array>
@@ -29,16 +31,15 @@ RotaryEncoder::RotaryEncoder(std::array<gpio_num_t,2> pins)
 		: pins_(pins) {
 	gpio_config_t config{};
 
-	config.pin_bit_mask = 1ULL << pins_[0];
-	config.pin_bit_mask |= 1ULL << pins_[1];
+	config.pin_bit_mask = (1ULL << pins_[0]) | (1ULL << pins_[1]);
 	config.mode = GPIO_MODE_INPUT;
 	config.pull_up_en = GPIO_PULLUP_ENABLE;
 	config.pull_down_en = GPIO_PULLDOWN_DISABLE;
 	config.intr_type = GPIO_INTR_DISABLE;
 
 	ESP_ERROR_CHECK(gpio_config(&config));
-	state_[0] = gpio_get_level(pins_[0]);
-	state_[1] = gpio_get_level(pins_[1]);
+	state_[0] = gpio_get_level(pins_[0]) == 0;
+	state_[1] = gpio_get_level(pins_[1]) == 0;
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[0], rotary_encoder_interrupt_handler_0, this));
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[1], rotary_encoder_interrupt_handler_1, this));
 }
@@ -57,11 +58,7 @@ void RotaryEncoder::start(WakeupThread &wakeup) {
 }
 
 long RotaryEncoder::read() {
-    std::atomic<long> change = 0;
-
-    change_.exchange(change);
-
-	return change;
+	return change_.exchange(0L);
 }
 
 void rotary_encoder_interrupt_handler_0(void *arg) {
@@ -73,6 +70,30 @@ void rotary_encoder_interrupt_handler_1(void *arg) {
 }
 
 void RotaryEncoder::interrupt_handler(int pin_id) {
-	// TODO
+	bool state = gpio_get_level(pins_[pin_id]) == 0;
+
+	if (state != state_[pin_id]) {
+		state_[pin_id] = state;
+	}
+
+	if (state) {
+		if (first_ == -1) {
+			first_ = pin_id;
+		}
+	} else {
+		first_ = -1;
+		return;
+	}
+
+	if (!state_[0] || !state_[1]) {
+		return;
+	}
+
+	if (first_ == 0) {
+		change_.fetch_add(1);
+	} else {
+		change_.fetch_sub(1);
+	}
+
 	wakeup_->wake_up_isr();
 }
