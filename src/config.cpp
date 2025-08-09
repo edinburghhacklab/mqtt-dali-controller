@@ -588,7 +588,7 @@ bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id
 				return false;
 			}
 
-			if (steps < MIN_ENCODER_STEPS || steps > MAX_ENCODER_STEPS) {
+			if (steps >= MIN_ENCODER_STEPS && steps <= MAX_ENCODER_STEPS) {
 				CFG_LOG(TAG, "Dimmer %u encoder steps = %" PRId64, dimmer_id, steps);
 				data_.dimmers[dimmer_id].encoder_steps = steps;
 			}
