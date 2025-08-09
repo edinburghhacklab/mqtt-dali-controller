@@ -201,7 +201,7 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	}
 
 	uint64_t start = esp_timer_get_time();
-	//ESP_LOGE(TAG, "Power level %u = %u", address, level);
+	ESP_LOGE(TAG, "Power level %u = %u", address, level);
 
 	/*
 	 * Microchip Technology, AN1465

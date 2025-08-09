@@ -18,6 +18,13 @@ the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
 The light switches are GPIOs 11, 12, 13, 14 and 16 (active low).
 
+Rotary encoders for dimming are on the following GPIOs (active low):
+* A0 and A1 (1 and 2)
+* A2 and A3 (3 and 4)
+* A4 and A5 (5 and 6)
+* A6 and A7 (7 and 8)
+* A8 and A9 (9 and 10)
+
 * [PCB](https://github.com/edinburghhacklab/dali-pcb)
 
 ## Network interface
