@@ -1305,7 +1305,7 @@ bool Config::get_ordered_preset(unsigned long long idx, std::string &name) const
 	return true;
 }
 
-void Config::set_preset(const std::string &name, const std::string &lights, long level) {
+void Config::set_preset(const std::string &name, const std::string &light_ids, long level) {
 	if (level < -1 || level > MAX_LEVEL) {
 		return;
 	}
@@ -1316,7 +1316,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 
 	std::lock_guard lock{data_mutex_};
 	bool idle_only;
-	auto light_ids = parse_light_ids(lights, idle_only);
+	auto lights = parse_light_ids(light_ids, idle_only);
 	auto it = current_.presets.find(name);
 
 	if (it == current_.presets.cend()) {
@@ -1334,7 +1334,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		if (current_.lights[i]) {
-			if (light_ids[i]) {
+			if (lights[i]) {
 				it->second[i] = level;
 			}
 		} else {
@@ -1349,7 +1349,7 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 	}
 
 	network_.report(TAG, std::string{"Preset "} + name + ": "
-		+ lights_text(light_ids) + " = " + std::to_string(level));
+		+ lights_text(lights) + " = " + std::to_string(level));
 
 	if (before != after) {
 		network_.report(TAG, std::string{"Preset "} + name + ": "
@@ -1465,12 +1465,12 @@ void Config::delete_preset(const std::string &name) {
 	dirty_config();
 }
 
-std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_id,
+std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 		bool &idle_only) const {
 	std::lock_guard lock{data_mutex_};
-	std::istringstream input{light_id};
+	std::istringstream input{light_ids};
 	std::string item;
-	std::bitset<MAX_ADDR+1> light_ids;
+	std::bitset<MAX_ADDR+1> lights;
 
 	idle_only = false;
 
@@ -1488,7 +1488,7 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_id,
 		} else if (group != current_.groups.end()) {
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (group->second[i]) {
-					light_ids[i] = true;
+					lights[i] = true;
 				}
 			}
 
@@ -1540,14 +1540,14 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_id,
 		}
 
 		for (unsigned long i = begin; i <= end; i++) {
-			light_ids[i] = true;
+			lights[i] = true;
 		}
 	}
 
-	return light_ids;
+	return lights;
 }
 
-std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &light_ids) const {
+std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &lights) const {
 	std::lock_guard lock{data_mutex_};
 	std::vector<std::string> light_texts;
 	std::string list = "";
@@ -1563,7 +1563,7 @@ std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &light_ids) const 
 			continue;
 		}
 
-		if (!light_ids[i]) {
+		if (!lights[i]) {
 			continue;
 		}
 

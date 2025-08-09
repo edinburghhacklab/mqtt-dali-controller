@@ -50,8 +50,8 @@ public:
 	void address_config_changed(const std::string &group);
 
 	std::array<uint8_t,MAX_ADDR+1> get_levels() const;
-	void select_preset(std::string name, const std::string &lights, bool internal = false);
-	void set_level(const std::string &lights, long level);
+	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
+	void set_level(const std::string &light_ids, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
 	void dim_adjust(const std::string &group, long level);
 

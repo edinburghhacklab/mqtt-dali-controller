@@ -170,13 +170,13 @@ public:
 	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;
 	bool get_ordered_preset(unsigned long long idx, std::string &name) const;
-	void set_preset(const std::string &name, const std::string &lights, long level);
+	void set_preset(const std::string &name, const std::string &light_ids, long level);
 	void set_preset(const std::string &name, std::string levels);
 	void set_ordered_presets(const std::string &names);
 	void delete_preset(const std::string &name);
 
-	std::bitset<MAX_ADDR+1> parse_light_ids(const std::string &light_id, bool &idle_only) const;
-	std::string lights_text(const std::bitset<MAX_ADDR+1> &light_ids) const;
+	std::bitset<MAX_ADDR+1> parse_light_ids(const std::string &light_ids, bool &idle_only) const;
+	std::string lights_text(const std::bitset<MAX_ADDR+1> &lights) const;
 
 private:
 	static constexpr const char *TAG = "Config";

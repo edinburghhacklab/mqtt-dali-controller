@@ -158,10 +158,10 @@ void Lights::save_rtc_state() {
 	rtc_crc_ = rtc_crc(levels);
 }
 
-void Lights::select_preset(std::string name, const std::string &lights, bool internal) {
+void Lights::select_preset(std::string name, const std::string &light_ids, bool internal) {
 	const auto addresses = config_.get_addresses();
 	bool idle_only;
-	const auto light_ids = config_.parse_light_ids(lights, idle_only);
+	const auto lights = config_.parse_light_ids(light_ids, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
@@ -186,16 +186,16 @@ void Lights::select_preset(std::string name, const std::string &lights, bool int
 	}
 
 	if (!internal && idle_only && !is_idle()) {
-		network_.report(TAG, config_.lights_text(light_ids) + " = " + name + " (ignored - not idle)");
+		network_.report(TAG, config_.lights_text(lights) + " = " + name + " (ignored - not idle)");
 		return;
 	}
 
-	report_dimmed_levels(light_ids, 0);
+	report_dimmed_levels(lights, 0);
 
 	for (int i = 0; i <= MAX_ADDR; i++) {
 		if (addresses[i]) {
 			if (preset_levels[i] != -1) {
-				if (light_ids[i]) {
+				if (lights[i]) {
 					levels_[i] = preset_levels[i];
 					republish_presets_.insert(active_presets_[i]);
 					active_presets_[i] = name;
@@ -223,21 +223,21 @@ void Lights::select_preset(std::string name, const std::string &lights, bool int
 		}
 
 		if (!internal) {
-			network_.report(TAG, config_.lights_text(light_ids) + " = " + name + (idle_only ? " (idle only)" : ""));
+			network_.report(TAG, config_.lights_text(lights) + " = " + name + (idle_only ? " (idle only)" : ""));
 		}
 
 		publish_levels(true);
 	}
 }
 
-void Lights::set_level(const std::string &lights, long level) {
+void Lights::set_level(const std::string &light_ids, long level) {
 	if (level < 0 || level > MAX_LEVEL) {
 		return;
 	}
 
 	const auto addresses = config_.get_addresses();
 	bool idle_only;
-	const auto light_ids = config_.parse_light_ids(lights, idle_only);
+	const auto lights = config_.parse_light_ids(light_ids, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	bool changed = false;
@@ -246,10 +246,10 @@ void Lights::set_level(const std::string &lights, long level) {
 		return;
 	}
 
-	report_dimmed_levels(light_ids, 0);
+	report_dimmed_levels(lights, 0);
 
 	for (int i = 0; i <= MAX_ADDR; i++) {
-		if (!addresses[i] || !light_ids[i]) {
+		if (!addresses[i] || !lights[i]) {
 			continue;
 		}
 
@@ -269,7 +269,7 @@ void Lights::set_level(const std::string &lights, long level) {
 			dali_->wake_up();
 		}
 
-		network_.report(TAG, config_.lights_text(light_ids) + " = " + std::to_string(level));
+		network_.report(TAG, config_.lights_text(lights) + " = " + std::to_string(level));
 		publish_levels(true);
 	}
 }
