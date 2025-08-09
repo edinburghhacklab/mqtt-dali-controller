@@ -71,7 +71,7 @@ def print_rtc_memory(fw_elf):
 		value = syms[0].value
 		for sym in syms:
 			if sym.value > value:
-				print("\t{1:0{0}x} {2:5d} UNKNOWN".format(8, value, sym.value - value))
+				print("\t{1:0{0}x} {2:5d} UNUSED".format(8, value, sym.value - value))
 			print(sym.line)
 			value = sym.value + sym.size
 

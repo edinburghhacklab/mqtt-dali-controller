@@ -25,7 +25,7 @@
 #include "thread.h"
 #include "util.h"
 
-static constexpr unsigned int NUM_SWITCHES = 2;
+static constexpr unsigned int NUM_SWITCHES = 5;
 
 class Config;
 class Lights;

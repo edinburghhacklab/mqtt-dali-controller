@@ -16,7 +16,7 @@ Control DALI lights using an ESP32-S3 over MQTT.
 The DALI interface is on GPIO 40 (RX) and 21 (TX). This is active high which is
 the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
-The light switches are GPIO 11 and GPIO 12 (active low).
+The light switches are GPIOs 11, 12, 13, 14 and 16 (active low).
 
 * [PCB](https://github.com/edinburghhacklab/dali-pcb)
 
@@ -82,14 +82,14 @@ start with a letter.
 Configure which light switches are present by setting the group associated with
 the switch and configuring the default preset:
 ```
-dali/switch/<0-1>/name [name] (retain)
-dali/switch/<0-1>/group <name> (retain)
-dali/switch/<0-1>/preset <name> (retain)
+dali/switch/<0-4>/name [name] (retain)
+dali/switch/<0-4>/group <name> (retain)
+dali/switch/<0-4>/preset <name> (retain)
 ```
 
 Light switch status is reported when it changes and then every 60 seconds:
 ```
-dali/switch/<0-1>/state <0-1> (retain)
+dali/switch/<0-4>/state <0-1> (retain)
 ```
 
 Whenever the light switch is turned on or off, the default preset (if

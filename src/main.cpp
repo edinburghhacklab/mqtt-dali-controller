@@ -150,18 +150,38 @@ void setup() {
 			config.set_addresses(std::string{(const char*)payload, length});
 			lights.address_config_changed(BUILTIN_GROUP_ALL);
 			dali.wake_up();
-		} else if (topic_str == "/switch/0/group") {
-			config.set_switch_group(0, std::string{(const char*)payload, length});
-		} else if (topic_str == "/switch/1/group") {
-			config.set_switch_group(1, std::string{(const char*)payload, length});
-		} else if (topic_str == "/switch/0/name") {
-			config.set_switch_name(0, std::string{(const char*)payload, length});
-		} else if (topic_str == "/switch/1/name") {
-			config.set_switch_name(1, std::string{(const char*)payload, length});
-		} else if (topic_str == "/switch/0/preset") {
-			config.set_switch_preset(0, std::string{(const char*)payload, length});
-		} else if (topic_str == "/switch/1/preset") {
-			config.set_switch_preset(1, std::string{(const char*)payload, length});
+		} else if (topic_str.rfind("/switch/", 0) == 0) {
+			if (topic_str == "/switch/0/group") {
+				config.set_switch_group(0, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/1/group") {
+				config.set_switch_group(1, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/2/group") {
+				config.set_switch_group(2, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/3/group") {
+				config.set_switch_group(3, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/4/group") {
+				config.set_switch_group(4, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/0/name") {
+				config.set_switch_name(0, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/1/name") {
+				config.set_switch_name(1, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/2/name") {
+				config.set_switch_name(2, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/3/name") {
+				config.set_switch_name(3, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/4/name") {
+				config.set_switch_name(4, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/0/preset") {
+				config.set_switch_preset(0, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/1/preset") {
+				config.set_switch_preset(1, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/2/preset") {
+				config.set_switch_preset(2, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/3/preset") {
+				config.set_switch_preset(3, std::string{(const char*)payload, length});
+			} else if (topic_str == "/switch/4/preset") {
+				config.set_switch_preset(4, std::string{(const char*)payload, length});
+			}
 		} else if (topic_str.rfind(group_prefix, 0) == 0) {
 			/* "/group/+" */
 			std::string group_name = topic_str.substr(group_prefix.length());
@@ -267,12 +287,9 @@ void loop() {
 		network.subscribe(topic + "/ota/+");
 		network.subscribe(topic + "/addresses");
 		network.subscribe(topic + "/group/+");
-		network.subscribe(topic + "/switch/0/group");
-		network.subscribe(topic + "/switch/1/group");
-		network.subscribe(topic + "/switch/0/name");
-		network.subscribe(topic + "/switch/1/name");
-		network.subscribe(topic + "/switch/0/preset");
-		network.subscribe(topic + "/switch/1/preset");
+		network.subscribe(topic + "/switch/+/group");
+		network.subscribe(topic + "/switch/+/name");
+		network.subscribe(topic + "/switch/+/preset");
 		network.subscribe(topic + "/preset/+");
 		network.subscribe(topic + "/preset/+/+");
 		network.subscribe(topic + "/set/+");

@@ -32,7 +32,13 @@
 #include "network.h"
 #include "util.h"
 
-static constexpr std::array<unsigned int,NUM_SWITCHES> SWITCH_GPIO = {11, 12};
+static constexpr std::array<gpio_num_t,NUM_SWITCHES> SWITCH_GPIO{{
+	(gpio_num_t)11,
+	(gpio_num_t)12,
+	(gpio_num_t)13,
+	(gpio_num_t)14,
+	(gpio_num_t)16,
+}};
 
 RTC_NOINIT_ATTR uint32_t Switches::rtc_states_[NUM_SWITCHES];
 RTC_NOINIT_ATTR uint32_t Switches::rtc_crc_;
@@ -40,8 +46,11 @@ RTC_NOINIT_ATTR uint32_t Switches::rtc_crc_;
 Switches::Switches(Network &network, const Config &config, Lights &lights)
 		: WakeupThread("switches", true), network_(network),
 		config_(config), lights_(lights), debounce_({
-			Debounce{(gpio_num_t)SWITCH_GPIO[0], true, DEBOUNCE_US},
-			Debounce{(gpio_num_t)SWITCH_GPIO[1], true, DEBOUNCE_US},
+			Debounce{SWITCH_GPIO[0], true, DEBOUNCE_US},
+			Debounce{SWITCH_GPIO[1], true, DEBOUNCE_US},
+			Debounce{SWITCH_GPIO[2], true, DEBOUNCE_US},
+			Debounce{SWITCH_GPIO[3], true, DEBOUNCE_US},
+			Debounce{SWITCH_GPIO[4], true, DEBOUNCE_US},
 		}) {
 	load_rtc_state();
 }
