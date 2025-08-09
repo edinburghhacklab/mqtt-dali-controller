@@ -152,7 +152,7 @@ uint32_t Switches::rtc_crc(const std::array<uint32_t,NUM_SWITCHES> &states) {
 }
 
 void Switches::load_rtc_state() {
-	ESP_LOGE(TAG, "RTC state at 0x%s", rtc_boot_memory().c_str());
+	ESP_LOGE(TAG, "RTC state at %s", rtc_boot_memory().c_str());
 
 	if (esp_reset_reason() == ESP_RST_POWERON) {
 		ESP_LOGE(TAG, "Ignoring switch states in RTC memory, first power on");
