@@ -37,7 +37,6 @@
 #include <cerrno>
 #include <mutex>
 #include <iostream>
-#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -1333,14 +1332,12 @@ void Config::set_preset(const std::string &name, const std::string &lights, long
 
 	auto before = preset_levels_text(it->second, &current_.lights);
 
-	for (unsigned int light_id : light_ids) {
-		if (current_.lights[light_id]) {
-			it->second[light_id] = level;
-		}
-	}
-
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (!current_.lights[i]) {
+		if (current_.lights[i]) {
+			if (light_ids[i]) {
+				it->second[i] = level;
+			}
+		} else {
 			it->second[i] = -1;
 		}
 	}
@@ -1468,12 +1465,12 @@ void Config::delete_preset(const std::string &name) {
 	dirty_config();
 }
 
-std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
+std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_id,
 		bool &idle_only) const {
 	std::lock_guard lock{data_mutex_};
 	std::istringstream input{light_id};
 	std::string item;
-	std::set<unsigned int> light_ids;
+	std::bitset<MAX_ADDR+1> light_ids;
 
 	idle_only = false;
 
@@ -1491,7 +1488,7 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
 		} else if (group != current_.groups.end()) {
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (group->second[i]) {
-					light_ids.insert(i);
+					light_ids[i] = true;
 				}
 			}
 
@@ -1543,14 +1540,14 @@ std::set<unsigned int> Config::parse_light_ids(const std::string &light_id,
 		}
 
 		for (unsigned long i = begin; i <= end; i++) {
-			light_ids.insert(i);
+			light_ids[i] = true;
 		}
 	}
 
 	return light_ids;
 }
 
-std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
+std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &light_ids) const {
 	std::lock_guard lock{data_mutex_};
 	std::vector<std::string> light_texts;
 	std::string list = "";
@@ -1559,26 +1556,26 @@ std::string Config::lights_text(const std::set<unsigned int> &light_ids) const {
 	unsigned int begin = INT_MAX;
 	unsigned int previous = INT_MAX;
 
-	for (unsigned int i = 0; i < MAX_ADDR; i++) {
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		if (current_.lights[i]) {
 			total++;
-		}
-	}
-
-	for (unsigned int light_id : light_ids) {
-		if (!current_.lights[light_id]) {
+		} else {
 			continue;
 		}
 
-		if (previous != INT_MAX && previous == light_id - 1) {
-			light_texts.pop_back();
-			light_texts.push_back(std::to_string(begin) + "-" + std::to_string(light_id));
-		} else {
-			begin = light_id;
-			light_texts.push_back(std::move(std::to_string(light_id)));
+		if (!light_ids[i]) {
+			continue;
 		}
 
-		previous = light_id;
+		if (previous != INT_MAX && previous == i - 1) {
+			light_texts.pop_back();
+			light_texts.push_back(std::to_string(begin) + "-" + std::to_string(i));
+		} else {
+			begin = i;
+			light_texts.push_back(std::move(std::to_string(i)));
+		}
+
+		previous = i;
 		found++;
 	}
 

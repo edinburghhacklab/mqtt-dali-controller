@@ -184,10 +184,10 @@ void Lights::select_preset(std::string name, const std::string &lights, bool int
 		return;
 	}
 
-	for (int i = 0; i < MAX_ADDR; i++) {
+	for (int i = 0; i <= MAX_ADDR; i++) {
 		if (addresses[i]) {
 			if (preset_levels[i] != -1) {
-				if (light_ids.find(i) != light_ids.end()) {
+				if (light_ids[i]) {
 					levels_[i] = preset_levels[i];
 					republish_presets_.insert(active_presets_[i]);
 					active_presets_[i] = name;
@@ -238,15 +238,15 @@ void Lights::set_level(const std::string &lights, long level) {
 		return;
 	}
 
-	for (int light_id : light_ids) {
-		if (!addresses[light_id]) {
+	for (int i = 0; i <= MAX_ADDR; i++) {
+		if (!addresses[i] || !light_ids[i]) {
 			continue;
 		}
 
-		levels_[light_id] = level;
-		republish_presets_.insert(active_presets_[light_id]);
-		active_presets_[light_id] = RESERVED_PRESET_CUSTOM;
-		republish_presets_.insert(active_presets_[light_id]);
+		levels_[i] = level;
+		republish_presets_.insert(active_presets_[i]);
+		active_presets_[i] = RESERVED_PRESET_CUSTOM;
+		republish_presets_.insert(active_presets_[i]);
 		changed = true;
 	}
 
@@ -336,7 +336,7 @@ void Lights::publish_levels(bool force) {
 		return;
 	}
 
-	std::lock_guard publish_lock{lights_mutex_};
+	std::lock_guard lock{lights_mutex_};
 	const auto addresses = config_.get_addresses();
 	std::vector<char> buffer(3 * (MAX_ADDR + 1) + 1);
 	size_t offset = 0;

@@ -26,7 +26,6 @@
 #include <array>
 #include <bitset>
 #include <mutex>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -176,8 +175,8 @@ public:
 	void set_ordered_presets(const std::string &names);
 	void delete_preset(const std::string &name);
 
-	std::set<unsigned int> parse_light_ids(const std::string &light_id, bool &idle_only) const;
-	std::string lights_text(const std::set<unsigned int> &light_ids) const;
+	std::bitset<MAX_ADDR+1> parse_light_ids(const std::string &light_id, bool &idle_only) const;
+	std::string lights_text(const std::bitset<MAX_ADDR+1> &light_ids) const;
 
 private:
 	static constexpr const char *TAG = "Config";
