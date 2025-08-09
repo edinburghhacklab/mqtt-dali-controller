@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "dali.h"
+#include "dimmers.h"
 #include "switches.h"
 
 static const std::string BUILTIN_GROUP_ALL = "all";
@@ -58,15 +59,31 @@ struct ConfigSwitchData {
 	inline bool operator!=(const ConfigSwitchData &other) const { return !(*this == other); }
 };
 
+struct ConfigDimmerData {
+	std::string group;
+	int encoder_steps;
+	unsigned int level_steps;
+
+	bool operator==(const ConfigDimmerData &other) const {
+		return this->group == other.group
+			&& this->encoder_steps == other.encoder_steps
+			&& this->level_steps == other.level_steps;
+	}
+
+	inline bool operator!=(const ConfigDimmerData &other) const { return !(*this == other); }
+};
+
 struct ConfigData {
 	std::bitset<MAX_ADDR+1> lights;
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
+	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
 	std::unordered_map<std::string,std::bitset<MAX_ADDR+1>> groups;
 	std::unordered_map<std::string,std::array<int16_t,MAX_ADDR+1>> presets;
 	std::vector<std::string> ordered;
 
 	bool operator==(const ConfigData &other) const {
 		return this->lights == other.lights
+			&& this->dimmers == other.dimmers
 			&& this->switches == other.switches
 			&& this->groups == other.groups
 			&& this->presets == other.presets
@@ -93,6 +110,8 @@ private:
 	bool read_config_group(cbor::Reader &reader);
 	bool read_config_switches(cbor::Reader &reader);
 	bool read_config_switch(cbor::Reader &reader, unsigned int switch_id);
+	bool read_config_dimmers(cbor::Reader &reader);
+	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
 	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
@@ -139,6 +158,15 @@ public:
 
 	std::string get_switch_preset(unsigned int switch_id) const;
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
+
+	std::string get_dimmer_group(unsigned int dimmer_id) const;
+	void set_dimmer_group(unsigned int dimmer_id, const std::string &name);
+
+	int get_dimmer_encoder_steps(unsigned int dimmer_id) const;
+	void set_dimmer_encoder_steps(unsigned int dimmer_id, int encoder_steps);
+
+	unsigned int get_dimmer_level_steps(unsigned int dimmer_id) const;
+	void set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_steps);
 
 	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;

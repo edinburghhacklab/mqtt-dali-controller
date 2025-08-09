@@ -87,7 +87,7 @@ void setup() {
 		startup_watchdog = true;
 	}
 
-	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL2));
+	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1));
 
 	Switches &switches = *new Switches{network, config, lights};
 	Dali &dali = *new Dali{config, lights};
@@ -181,6 +181,51 @@ void setup() {
 				config.set_switch_preset(3, std::string{(const char*)payload, length});
 			} else if (topic_str == "/switch/4/preset") {
 				config.set_switch_preset(4, std::string{(const char*)payload, length});
+			}
+		} else if (topic_str.rfind("/dimmer/", 0) == 0) {
+			long value = 0;
+
+			if (length) {
+				std::string payload_copy = std::string{(const char *)payload, length};
+				char *endptr = nullptr;
+
+				errno = 0;
+				value = std::strtol(payload_copy.c_str(), &endptr, 10);
+				if (!endptr || endptr[0] || errno) {
+					value = 0;
+				}
+			}
+
+			if (topic_str == "/dimmer/0/group") {
+				config.set_dimmer_group(0, std::string{(const char*)payload, length});
+			} else if (topic_str == "/dimmer/1/group") {
+				config.set_dimmer_group(1, std::string{(const char*)payload, length});
+			} else if (topic_str == "/dimmer/2/group") {
+				config.set_dimmer_group(2, std::string{(const char*)payload, length});
+			} else if (topic_str == "/dimmer/3/group") {
+				config.set_dimmer_group(3, std::string{(const char*)payload, length});
+			} else if (topic_str == "/dimmer/4/group") {
+				config.set_dimmer_group(4, std::string{(const char*)payload, length});
+			} else if (topic_str == "/dimmer/0/encoder_steps") {
+				config.set_dimmer_encoder_steps(0, value);
+			} else if (topic_str == "/dimmer/1/encoder_steps") {
+				config.set_dimmer_encoder_steps(1, value);
+			} else if (topic_str == "/dimmer/2/encoder_steps") {
+				config.set_dimmer_encoder_steps(2, value);
+			} else if (topic_str == "/dimmer/3/encoder_steps") {
+				config.set_dimmer_encoder_steps(3, value);
+			} else if (topic_str == "/dimmer/4/encoder_steps") {
+				config.set_dimmer_encoder_steps(4, value);
+			} else if (topic_str == "/dimmer/0/level_steps") {
+				config.set_dimmer_level_steps(0, value);
+			} else if (topic_str == "/dimmer/1/level_steps") {
+				config.set_dimmer_level_steps(1, value);
+			} else if (topic_str == "/dimmer/2/level_steps") {
+				config.set_dimmer_level_steps(2, value);
+			} else if (topic_str == "/dimmer/3/level_steps") {
+				config.set_dimmer_level_steps(3, value);
+			} else if (topic_str == "/dimmer/4/level_steps") {
+				config.set_dimmer_level_steps(4, value);
 			}
 		} else if (topic_str.rfind(group_prefix, 0) == 0) {
 			/* "/group/+" */
@@ -290,6 +335,9 @@ void loop() {
 		network.subscribe(topic + "/switch/+/group");
 		network.subscribe(topic + "/switch/+/name");
 		network.subscribe(topic + "/switch/+/preset");
+		network.subscribe(topic + "/dimmer/+/group");
+		network.subscribe(topic + "/dimmer/+/encoder_steps");
+		network.subscribe(topic + "/dimmer/+/level_steps");
 		network.subscribe(topic + "/preset/+");
 		network.subscribe(topic + "/preset/+/+");
 		network.subscribe(topic + "/set/+");

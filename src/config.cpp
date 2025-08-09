@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "dali.h"
+#include "dimmers.h"
 #include "lights.h"
 #include "network.h"
 #include "switches.h"
@@ -323,6 +324,10 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			if (!read_config_switches(reader)) {
 				return false;
 			}
+		} else if (key == "dimmers") {
+			if (!read_config_dimmers(reader)) {
+				return false;
+			}
 		} else if (key == "presets") {
 			if (!read_config_presets(reader)) {
 				return false;
@@ -492,7 +497,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			if (Config::valid_group_name(group, true)) {
+			if (group.empty() || Config::valid_group_name(group, true)) {
 				CFG_LOG(TAG, "Switch %u group = %s", switch_id, group.c_str());
 				data_.switches[switch_id].group = std::move(group);
 			} else {
@@ -505,7 +510,7 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 				return false;
 			}
 
-			if (Config::valid_preset_name(preset, true)) {
+			if (preset.empty() || Config::valid_preset_name(preset, true)) {
 				CFG_LOG(TAG, "Switch %u preset = %s", switch_id, preset.c_str());
 				data_.switches[switch_id].preset = std::move(preset);
 			} else {
@@ -513,6 +518,94 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			}
 		} else {
 			CFG_LOG(TAG, "Unknown switch %u key: %s", switch_id, key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_dimmers(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (i < NUM_SWITCHES) {
+			if (!read_config_dimmer(reader, i)) {
+				return false;
+			}
+
+			i++;
+		} else {
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "group") {
+			std::string group;
+
+			if (!readText(reader, group, UINT8_MAX)) {
+				return false;
+			}
+
+			if (group.empty() || Config::valid_group_name(group, true)) {
+				CFG_LOG(TAG, "Dimmer %u group = %s", dimmer_id, group.c_str());
+				data_.dimmers[dimmer_id].group = std::move(group);
+			} else {
+				CFG_LOG(TAG, "Dimmer %u invalid group ignored: %s", dimmer_id, group.c_str());
+			}
+		} else if (key == "encoder_steps") {
+			int64_t steps;
+
+			if (!cbor::expectInt(reader, &steps)) {
+				return false;
+			}
+
+			if (steps < MIN_ENCODER_STEPS || steps > MAX_ENCODER_STEPS) {
+				CFG_LOG(TAG, "Dimmer %u encoder steps = %" PRId64, dimmer_id, steps);
+				data_.dimmers[dimmer_id].encoder_steps = steps;
+			}
+		} else if (key == "level_steps") {
+			uint64_t steps;
+
+			if (!cbor::expectUnsignedInt(reader, &steps)) {
+				return false;
+			}
+
+			if (steps <= MAX_LEVEL) {
+				CFG_LOG(TAG, "Dimmer %u level steps = %" PRIu64, dimmer_id, steps);
+				data_.dimmers[dimmer_id].level_steps = steps;
+			}
+		} else {
+			CFG_LOG(TAG, "Unknown dimmer %u key: %s", dimmer_id, key.c_str());
 
 			if (!reader.isWellFormed()) {
 				return false;
@@ -726,7 +819,7 @@ bool ConfigFile::write_config(const std::string &filename) const {
 }
 
 void ConfigFile::write_config(cbor::Writer &writer) const {
-	writer.beginMap(5);
+	writer.beginMap(6);
 
 	writeText(writer, "lights");
 	writer.beginArray(MAX_ADDR+1);
@@ -762,6 +855,21 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 
 		writeText(writer, "preset");
 		writeText(writer, data_.switches[i].preset);
+	}
+
+	writeText(writer, "dimmers");
+	writer.beginArray(NUM_DIMMERS);
+	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
+		writer.beginMap(3);
+
+		writeText(writer, "group");
+		writeText(writer, data_.dimmers[i].group);
+
+		writeText(writer, "encoder_steps");
+		writer.writeInt(data_.dimmers[i].encoder_steps);
+
+		writeText(writer, "level_steps");
+		writer.writeUnsignedInt(data_.dimmers[i].level_steps);
 	}
 
 	writeText(writer, "presets");
@@ -803,6 +911,14 @@ void Config::publish_config() const {
 		network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
 		network_.publish(switch_prefix + "/group", current_.switches[i].group, true);
 		network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
+	}
+
+	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
+		auto dimmer_prefix = std::string{MQTT_TOPIC} + "/dimmer/" + std::to_string(i);
+
+		network_.publish(dimmer_prefix + "/group", current_.dimmers[i].group, true);
+		network_.publish(dimmer_prefix + "/encoder_steps", std::to_string(current_.dimmers[i].encoder_steps), true);
+		network_.publish(dimmer_prefix + "/level_steps", std::to_string(current_.dimmers[i].level_steps), true);
 	}
 
 	for (const auto &preset : current_.presets) {
@@ -1005,7 +1121,7 @@ void Config::set_switch_group(unsigned int switch_id, const std::string &group) 
 	std::lock_guard lock{data_mutex_};
 
 	if (switch_id < NUM_SWITCHES) {
-		if (!valid_group_name(group, true)) {
+		if (!group.empty() && !valid_group_name(group, true)) {
 			return;
 		}
 
@@ -1035,7 +1151,7 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 	std::lock_guard lock{data_mutex_};
 
 	if (switch_id < NUM_SWITCHES) {
-		if (!valid_preset_name(preset, true)) {
+		if (!preset.empty() && !valid_preset_name(preset, true)) {
 			return;
 		}
 
@@ -1046,6 +1162,96 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 				+ " -> " + quoted_string(preset));
 
 			current_.switches[switch_id].preset = preset;
+			dirty_config();
+		}
+	}
+}
+
+std::string Config::get_dimmer_group(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return current_.dimmers[dimmer_id].group;
+	} else {
+		return "";
+	}
+}
+
+void Config::set_dimmer_group(unsigned int dimmer_id, const std::string &group) {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		if (!group.empty() && !valid_group_name(group, true)) {
+			return;
+		}
+
+		if (current_.dimmers[dimmer_id].group != group) {
+			network_.report(TAG, std::string{"Dimmer "}
+				+ std::to_string(dimmer_id) + " group: "
+				+ quoted_string(current_.dimmers[dimmer_id].group)
+				+ " -> " + quoted_string(group));
+
+			current_.dimmers[dimmer_id].group = group;
+			dirty_config();
+		}
+	}
+}
+
+int Config::get_dimmer_encoder_steps(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return current_.dimmers[dimmer_id].encoder_steps;
+	} else {
+		return 0;
+	}
+}
+
+void Config::set_dimmer_encoder_steps(unsigned int dimmer_id, int encoder_steps) {
+	if (encoder_steps < MIN_ENCODER_STEPS || encoder_steps > MAX_ENCODER_STEPS) {
+		return;
+	}
+
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		if (current_.dimmers[dimmer_id].encoder_steps != encoder_steps) {
+			network_.report(TAG, std::string{"Dimmer "}
+				+ std::to_string(dimmer_id) + " encoder steps: "
+				+ std::to_string(current_.dimmers[dimmer_id].encoder_steps)
+				+ " -> " + std::to_string(encoder_steps));
+
+			current_.dimmers[dimmer_id].encoder_steps = encoder_steps;
+			dirty_config();
+		}
+	}
+}
+
+unsigned int Config::get_dimmer_level_steps(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return current_.dimmers[dimmer_id].level_steps;
+	} else {
+		return 0;
+	}
+}
+
+void Config::set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_steps) {
+	if (level_steps > MAX_LEVEL) {
+		return;
+	}
+
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		if (current_.dimmers[dimmer_id].level_steps != level_steps) {
+			network_.report(TAG, std::string{"Dimmer "}
+				+ std::to_string(dimmer_id) + " level steps: "
+				+ std::to_string(current_.dimmers[dimmer_id].level_steps)
+				+ " -> " + std::to_string(level_steps));
+
+			current_.dimmers[dimmer_id].level_steps = level_steps;
 			dirty_config();
 		}
 	}

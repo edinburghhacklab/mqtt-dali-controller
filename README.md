@@ -97,6 +97,20 @@ configured) will be applied. This ensures that the lights function as expected
 when they're turned on even if their light levels have previously been dimmed or
 set to `off`.
 
+### Dimmers
+
+Configure which light dimmers are present by setting the group associated with
+the dimmer and configuring the encoder/level steps:
+```
+dali/dimmer/<0-4>/group <name> (retain)
+dali/dimmer/<0-4>/encoder_steps <steps> (retain)
+dali/dimmer/<0-4>/level_steps <0-254> (retain)
+```
+
+Encoder steps can be configured in the range 1 to 127 (for forward movement) or
+-1 to -127 (for backward movement). Setting the steps to 0 will disable the
+dimmer.
+
 ### Presets
 
 Up to 20 presets can be configured, by assigning light levels to each light,
