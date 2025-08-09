@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include <array>
 
+#include "dali.h"
 #include "rotary_encoder.h"
 #include "thread.h"
 #include "util.h"
@@ -35,6 +36,8 @@ class Lights;
 struct DimmerState {
 public:
 	DimmerState() = default;
+
+	long encoder_steps{0};
 };
 
 class Dimmers: public WakeupThread {
@@ -50,7 +53,7 @@ private:
 	~Dimmers() = delete;
 
 	unsigned long run_tasks() override;
-	unsigned long run_dimmer(unsigned int dimmer_id);
+	void run_dimmer(unsigned int dimmer_id);
 
 	const Config &config_;
 	Lights &lights_;

@@ -56,12 +56,12 @@ void RotaryEncoder::start(WakeupThread &wakeup) {
 	ESP_ERROR_CHECK(gpio_intr_enable(pins_[1]));
 }
 
-RotaryEncoderResult RotaryEncoder::run() {
+long RotaryEncoder::read() {
     std::atomic<long> change = 0;
 
     change_.exchange(change);
 
-	return {change};
+	return change;
 }
 
 void rotary_encoder_interrupt_handler_0(void *arg) {

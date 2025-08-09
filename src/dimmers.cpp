@@ -23,6 +23,7 @@
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 
+#include <algorithm>
 #include <array>
 #include <string>
 
@@ -60,19 +61,51 @@ void Dimmers::setup() {
 }
 
 unsigned long Dimmers::run_tasks() {
-	unsigned long wait_ms = WATCHDOG_INTERVAL_MS;
-
 	esp_task_wdt_reset();
 
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		wait_ms = std::min(wait_ms, run_dimmer(i));
+		run_dimmer(i);
 	}
 
-	return wait_ms;
+	return WATCHDOG_INTERVAL_MS;
 }
 
-unsigned long Dimmers::run_dimmer(unsigned int dimmer_id) {
-	auto group = config_.get_dimmer_group(dimmer_id);
+void Dimmers::run_dimmer(unsigned int dimmer_id) {
+	long encoder_steps = config_.get_dimmer_encoder_steps(dimmer_id);
+	long encoder_change = encoder_[dimmer_id].read();
 
-	return ULONG_MAX;
+	if (encoder_steps == 0) {
+		state_[dimmer_id].encoder_steps = 0;
+	} else {
+		state_[dimmer_id].encoder_steps += encoder_change;
+	}
+
+	if (state_[dimmer_id].encoder_steps == 0) {
+		return;
+	}
+
+	long abs_encoder_steps = std::abs(encoder_steps);
+	bool encoder_forward = state_[dimmer_id].encoder_steps > 0;
+	bool steps_forward = encoder_steps > 0;
+	long change_count = std::abs(state_[dimmer_id].encoder_steps) / abs_encoder_steps;
+
+	if (change_count == 0) {
+		return;
+	}
+
+	if (!encoder_forward) {
+		change_count = -change_count;
+	}
+
+	state_[dimmer_id].encoder_steps -= change_count * abs_encoder_steps;
+
+	if (!steps_forward) {
+		change_count = -change_count;
+	}
+
+	auto group = config_.get_dimmer_group(dimmer_id);
+	long level_steps = config_.get_dimmer_level_steps(dimmer_id);
+	long level_change = std::max(-(long)MAX_LEVEL, std::min((long)MAX_LEVEL, change_count * level_steps));
+
+	lights_.dim_adjust(group, level_change);
 }

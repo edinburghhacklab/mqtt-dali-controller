@@ -29,10 +29,6 @@ class WakeupThread;
 IRAM_ATTR void rotary_encoder_interrupt_handler_0(void *arg);
 IRAM_ATTR void rotary_encoder_interrupt_handler_1(void *arg);
 
-struct RotaryEncoderResult {
-	long change;
-};
-
 class RotaryEncoder {
 	friend void rotary_encoder_interrupt_handler_0(void *arg);
 	friend void rotary_encoder_interrupt_handler_1(void *arg);
@@ -42,7 +38,7 @@ public:
 	~RotaryEncoder();
 
 	void start(WakeupThread &wakeup);
-	RotaryEncoderResult run();
+	long read();
 
 private:
 	// cppcheck-suppress unusedPrivateFunction
