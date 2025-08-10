@@ -120,7 +120,8 @@ unsigned long Dali::run_tasks() {
 				unsigned address = next_address_;
 
 			if (lights[address] && levels[address] != tx_levels_[address]) {
-				if (tx_power_level(address, levels[address])) {
+				if (levels[address] > MAX_LEVEL
+						|| tx_power_level(address, levels[address])) {
 					tx_levels_[address] = levels[address];
 					changed = true;
 					refresh = false;
@@ -157,7 +158,8 @@ unsigned long Dali::run_tasks() {
 			unsigned address = next_address_;
 
 			if (lights[address]) {
-				if (tx_power_level(address, levels[address])) {
+				if (levels[address] > MAX_LEVEL
+						|| tx_power_level(address, levels[address])) {
 					tx_levels_[address] = levels[address];
 					changed = true;
 				}
