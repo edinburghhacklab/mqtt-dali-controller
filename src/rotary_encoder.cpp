@@ -21,9 +21,12 @@
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <esp_log.h>
+#include <hal/rtc_cntl_ll.h>
 
+#include <algorithm>
 #include <atomic>
 #include <array>
+#include <cstring>
 
 #include "thread.h"
 
@@ -62,31 +65,44 @@ long RotaryEncoder::read() {
 	return change_.exchange(0L);
 }
 
-void rotary_encoder_interrupt_handler_0(void *arg) {
+void RotaryEncoder::debug(std::array<RotaryEncoderDebug,DEBUG_RECORDS> &records) const {
+	size_t pos = debug_pos_;
+
+	std::copy(debug_.cbegin(), debug_.cend(), records.begin());
+	std::rotate(records.begin(), records.begin() + pos, records.end());
+}
+
+IRAM_ATTR void rotary_encoder_interrupt_handler_0(void *arg) {
 	static_cast<RotaryEncoder*>(arg)->interrupt_handler(0);
 }
 
-void rotary_encoder_interrupt_handler_1(void *arg) {
+IRAM_ATTR void rotary_encoder_interrupt_handler_1(void *arg) {
 	static_cast<RotaryEncoder*>(arg)->interrupt_handler(1);
 }
 
-void RotaryEncoder::interrupt_handler(int pin_id) {
+IRAM_ATTR void RotaryEncoder::interrupt_handler(int pin_id) {
 	bool state = gpio_get_level(pins_[pin_id]) == 0;
 
-	if (state != state_[pin_id]) {
-		state_[pin_id] = state;
+	debug_[debug_pos_] = {
+		.pin = (uint32_t)pin_id,
+		.state = state,
+		.time_us = (uint32_t)rtc_cntl_ll_get_rtc_time(),
+	};
+	debug_pos_ = (debug_pos_ + 1) % debug_.size();
+
+	if (state == state_[pin_id]) {
+		return;
 	}
 
-	if (state) {
-		if (first_ == -1) {
-			first_ = pin_id;
-		}
-	} else {
+	state_[pin_id] = state;
+
+	if (!state) {
 		first_ = -1;
 		return;
 	}
 
-	if (!state_[0] || !state_[1]) {
+	if (first_ == -1) {
+		first_ = pin_id;
 		return;
 	}
 

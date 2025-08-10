@@ -32,6 +32,7 @@ static constexpr int MAX_ENCODER_STEPS = 127;
 
 class Config;
 class Lights;
+class Network;
 
 struct DimmerState {
 public:
@@ -42,9 +43,10 @@ public:
 
 class Dimmers: public WakeupThread {
 public:
-	Dimmers(const Config &config, Lights &lights);
+	Dimmers(Network &network, const Config &config, Lights &lights);
 
 	void setup();
+	void publish_debug(unsigned int dimmer_id);
 
 private:
 	static constexpr const char *TAG = "Dimmers";
@@ -55,6 +57,7 @@ private:
 	unsigned long run_tasks() override;
 	void run_dimmer(unsigned int dimmer_id);
 
+	Network &network_;
 	const Config &config_;
 	Lights &lights_;
 

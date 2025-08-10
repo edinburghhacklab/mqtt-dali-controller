@@ -94,11 +94,11 @@ DebounceResult Debounce::run() {
 	return {wait_ms, changed};
 }
 
-void debounce_interrupt_handler(void *arg) {
+IRAM_ATTR void debounce_interrupt_handler(void *arg) {
 	static_cast<Debounce*>(arg)->interrupt_handler();
 }
 
-void Debounce::interrupt_handler() {
+IRAM_ATTR void Debounce::interrupt_handler() {
 	change_count_irq_++;
 	wakeup_->wake_up_isr();
 }

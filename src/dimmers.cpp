@@ -29,6 +29,8 @@
 
 #include "config.h"
 #include "lights.h"
+#include "network.h"
+#include "rotary_encoder.h"
 #include "util.h"
 
 static constexpr std::array<std::array<gpio_num_t,2>,NUM_DIMMERS> DIMMER_GPIO{{
@@ -39,8 +41,8 @@ static constexpr std::array<std::array<gpio_num_t,2>,NUM_DIMMERS> DIMMER_GPIO{{
     {(gpio_num_t)9, (gpio_num_t)10},
 }};
 
-Dimmers::Dimmers(const Config &config, Lights &lights)
-		: WakeupThread("dimmers", true), config_(config),
+Dimmers::Dimmers(Network &network, const Config &config, Lights &lights)
+		: WakeupThread("dimmers", true), network_(network), config_(config),
 		lights_(lights), encoder_({
 			RotaryEncoder{DIMMER_GPIO[0]},
 			RotaryEncoder{DIMMER_GPIO[1]},
@@ -109,4 +111,31 @@ void Dimmers::run_dimmer(unsigned int dimmer_id) {
 	long level_change = std::max(-(long)MAX_LEVEL, std::min((long)MAX_LEVEL, change_count * level_steps));
 
 	lights_.dim_adjust(group, level_change);
+}
+
+void Dimmers::publish_debug(unsigned int dimmer_id) {
+	static std::array<RotaryEncoderDebug,RotaryEncoder::DEBUG_RECORDS> records;
+
+	if (dimmer_id >= NUM_DIMMERS) {
+		return;
+	}
+
+	std::string topic = std::string{MQTT_TOPIC} + "/dimmer/"
+		+ std::to_string(dimmer_id) + "/debug_log";
+
+	encoder_[dimmer_id].debug(records);
+
+	for (const auto &record : records) {
+		std::string output;
+
+		output += std::to_string(record.time_us);
+		output += ' ';
+		if (record.state) {
+			output += record.pin == 0 ? 'A' : 'B';
+		} else {
+			output += record.pin == 0 ? 'a' : 'b';
+		}
+
+		network_.publish(topic, output);
+	}
 }

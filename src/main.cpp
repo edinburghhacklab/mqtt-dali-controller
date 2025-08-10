@@ -90,7 +90,7 @@ void setup() {
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1));
 
 	Switches &switches = *new Switches{network, config, lights};
-	Dimmers &dimmers = *new Dimmers{config, lights};
+	Dimmers &dimmers = *new Dimmers{network, config, lights};
 	Dali &dali = *new Dali{config, lights};
 
 	dali.setup();
@@ -105,7 +105,7 @@ void setup() {
 	ui.set_dali(dali);
 	ui.set_switches(switches);
 
-	network.setup([&dali] (const char *topic, const uint8_t *payload, unsigned int length) {
+	network.setup([&dali, &dimmers] (const char *topic, const uint8_t *payload, unsigned int length) {
 		static const std::string group_prefix = "/group/";
 		static const std::string preset_prefix = "/preset/";
 		static const std::string set_prefix = "/set/";
@@ -229,6 +229,16 @@ void setup() {
 				config.set_dimmer_level_steps(3, value);
 			} else if (topic_str == "/dimmer/4/level_steps") {
 				config.set_dimmer_level_steps(4, value);
+			} else if (topic_str == "/dimmer/0/get_debug") {
+				dimmers.publish_debug(0);
+			} else if (topic_str == "/dimmer/1/get_debug") {
+				dimmers.publish_debug(1);
+			} else if (topic_str == "/dimmer/2/get_debug") {
+				dimmers.publish_debug(2);
+			} else if (topic_str == "/dimmer/3/get_debug") {
+				dimmers.publish_debug(3);
+			} else if (topic_str == "/dimmer/4/get_debug") {
+				dimmers.publish_debug(4);
 			}
 		} else if (topic_str.rfind(group_prefix, 0) == 0) {
 			/* "/group/+" */
@@ -341,6 +351,7 @@ void loop() {
 		network.subscribe(topic + "/dimmer/+/group");
 		network.subscribe(topic + "/dimmer/+/encoder_steps");
 		network.subscribe(topic + "/dimmer/+/level_steps");
+		network.subscribe(topic + "/dimmer/+/get_debug");
 		network.subscribe(topic + "/preset/+");
 		network.subscribe(topic + "/preset/+/+");
 		network.subscribe(topic + "/set/+");

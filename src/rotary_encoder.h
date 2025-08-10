@@ -29,16 +29,29 @@ class WakeupThread;
 IRAM_ATTR void rotary_encoder_interrupt_handler_0(void *arg);
 IRAM_ATTR void rotary_encoder_interrupt_handler_1(void *arg);
 
+struct RotaryEncoderDebug {
+	uint32_t pin:1;
+	uint32_t state:1;
+	uint32_t time_us:30;
+};
+
 class RotaryEncoder {
 	friend void rotary_encoder_interrupt_handler_0(void *arg);
 	friend void rotary_encoder_interrupt_handler_1(void *arg);
 
 public:
+	/*
+	 * One rotation has 100 positions, each with 4 state changes.
+	 * Record the last 2 full rotations.
+	 */
+	static constexpr size_t DEBUG_RECORDS = 800;
+
 	RotaryEncoder(std::array<gpio_num_t,2> pins);
 	~RotaryEncoder();
 
 	void start(WakeupThread &wakeup);
 	long read();
+	void debug(std::array<RotaryEncoderDebug,DEBUG_RECORDS> &records) const;
 
 private:
 	// cppcheck-suppress unusedPrivateFunction
@@ -50,4 +63,6 @@ private:
 	int first_{-1};
 
 	std::atomic<long> change_{0};
+	std::array<RotaryEncoderDebug,DEBUG_RECORDS> debug_{};
+	size_t debug_pos_{0};
 };
