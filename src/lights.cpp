@@ -107,6 +107,18 @@ std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
 	return levels_;
 }
 
+std::bitset<MAX_ADDR+1> Lights::get_refresh() const {
+	std::lock_guard lock{lights_mutex_};
+	std::bitset<MAX_ADDR+1> refresh;
+	uint64_t now = esp_timer_get_time();
+
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		refresh[i] = refresh_until_time_us_[i] > now;
+	}
+
+	return refresh;
+}
+
 bool Lights::is_idle() {
 	return esp_timer_get_time() - last_activity_us_ >= IDLE_US;
 }
@@ -283,8 +295,30 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 	power_known_ |= lights;
 
 	if (on) {
+		if ((power_on_ & lights) != lights) {
+			uint64_t refresh_time_us = esp_timer_get_time() + REFRESH_TIME_US;
+
+			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+				if (lights[i] && !power_on_[i]) {
+					refresh_until_time_us_[i] = refresh_time_us;
+				}
+			}
+
+			if (dali_) {
+				dali_->wake_up();
+			}
+		}
+
 		power_on_ |= lights;
 	} else {
+		if ((power_on_ & lights).any()) {
+			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+				if (lights[i]) {
+					refresh_until_time_us_[i] = 0;
+				}
+			}
+		}
+
 		power_on_ &= ~lights;
 	}
 }

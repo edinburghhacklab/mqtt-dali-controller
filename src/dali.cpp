@@ -115,13 +115,15 @@ unsigned long Dali::run_tasks() {
 	do {
 		const auto lights = config_.get_addresses();
 		const auto levels = lights_.get_levels();
+		const auto force_refresh = lights_.get_refresh();
 
 		changed = false;
 
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				unsigned address = next_address_;
 
-			if (lights[address] && levels[address] != tx_levels_[address]) {
+			if (lights[address]
+					&& (force_refresh[address] || levels[address] != tx_levels_[address])) {
 				if (levels[address] > MAX_LEVEL
 						|| tx_power_level(address, levels[address])) {
 					tx_levels_[address] = levels[address];
