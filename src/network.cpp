@@ -136,9 +136,6 @@ size_t Network::maximum_queue_size() {
 
 void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback) {
 	WiFi.persistent(false);
-	WiFi.setAutoReconnect(false);
-	WiFi.setSleep(false);
-	WiFi.mode(WIFI_STA);
 
 	std::string hostname = WiFi.getHostname();
 	auto idx = hostname.find("-");
@@ -147,6 +144,10 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 		ESP_LOGE(TAG, "Hostname = %s", hostname.c_str());
 		WiFi.setHostname(hostname.c_str());
 	}
+
+	WiFi.setAutoReconnect(false);
+	WiFi.setSleep(false);
+	WiFi.mode(WIFI_STA);
 
 	mqtt_.setServer(MQTT_HOSTNAME, MQTT_PORT);
 	mqtt_.setBufferSize(Message::BUFFER_SIZE);
