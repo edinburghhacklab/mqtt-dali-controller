@@ -46,6 +46,7 @@ public:
 	Dali(const Config &config, const Lights &lights);
 
 	void setup();
+	void start();
 	DaliStats get_stats();
 
 	using WakeupThread::wake_up;

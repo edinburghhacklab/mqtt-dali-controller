@@ -33,17 +33,18 @@ WakeupThread::WakeupThread(const char *name, bool watchdog) : name_(name),
 		ESP_LOGE(TAG, "Semaphore create for %s failed", name_);
 		esp_restart();
 	}
+}
 
+void WakeupThread::run_loop() {
 	esp_timer_create_args_t timer_config{};
+
 	timer_config.callback = wake_up_timer;
 	timer_config.arg = this;
 	timer_config.dispatch_method = ESP_TIMER_TASK;
 	timer_config.name = name_;
 
 	ESP_ERROR_CHECK(esp_timer_create(&timer_config, &timer_));
-}
 
-void WakeupThread::run_loop() {
 	if (watchdog_) {
 		ESP_ERROR_CHECK(esp_task_wdt_add(nullptr));
 	}

@@ -80,7 +80,9 @@ void Dali::setup() {
 	static_assert((uint32_t)(1000/12.5f) == 80U);
 	rmtSetTick(rmt_, TICK_NS);
 	tx_idle();
+}
 
+void Dali::start() {
 	std::thread t;
 	make_thread(t, "dali", 8192, 1, 19, &Dali::run_loop, this);
 	t.detach();

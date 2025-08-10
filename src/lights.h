@@ -40,6 +40,7 @@ public:
 
 	static std::string rtc_boot_memory();
 
+	void setup();
 	void set_dali(Dali &dali);
 	void loop();
 	void startup_complete(bool state);

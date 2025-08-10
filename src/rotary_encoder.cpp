@@ -29,7 +29,17 @@
 
 RotaryEncoder::RotaryEncoder(std::array<gpio_num_t,2> pins)
 		: pins_(pins) {
+}
+
+RotaryEncoder::~RotaryEncoder() {
+	gpio_intr_disable(pins_[0]);
+	gpio_intr_disable(pins_[1]);
+}
+
+void RotaryEncoder::start(WakeupThread &wakeup) {
 	gpio_config_t config{};
+
+	wakeup_ = &wakeup;
 
 	config.pin_bit_mask = (1ULL << pins_[0]) | (1ULL << pins_[1]);
 	config.mode = GPIO_MODE_INPUT;
@@ -42,15 +52,6 @@ RotaryEncoder::RotaryEncoder(std::array<gpio_num_t,2> pins)
 	state_[1] = gpio_get_level(pins_[1]) == 0;
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[0], rotary_encoder_interrupt_handler_0, this));
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[1], rotary_encoder_interrupt_handler_1, this));
-}
-
-RotaryEncoder::~RotaryEncoder() {
-	ESP_ERROR_CHECK(gpio_intr_disable(pins_[0]));
-	ESP_ERROR_CHECK(gpio_intr_disable(pins_[1]));
-}
-
-void RotaryEncoder::start(WakeupThread &wakeup) {
-	wakeup_ = &wakeup;
 	ESP_ERROR_CHECK(gpio_set_intr_type(pins_[0], GPIO_INTR_ANYEDGE));
 	ESP_ERROR_CHECK(gpio_set_intr_type(pins_[1], GPIO_INTR_ANYEDGE));
 	ESP_ERROR_CHECK(gpio_intr_enable(pins_[0]));

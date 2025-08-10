@@ -95,9 +95,10 @@ void setup() {
 
 	dali.setup();
 	config.setup();
-	dali.wake_up();
+	lights.setup();
 	switches.setup();
 	dimmers.setup();
+	dali.start();
 	ui.setup();
 
 	lights.set_dali(dali);

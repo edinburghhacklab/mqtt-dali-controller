@@ -31,7 +31,16 @@ Debounce::Debounce(gpio_num_t pin, bool active_low,
 		: press_duration_us_(press_duration_us),
 		release_duration_us_(release_duration_us),
 		pin_(pin), active_low_(active_low) {
+}
+
+Debounce::~Debounce() {
+	gpio_intr_disable(pin_);
+}
+
+void Debounce::start(WakeupThread &wakeup) {
 	gpio_config_t config{};
+
+	wakeup_ = &wakeup;
 
 	config.pin_bit_mask = 1ULL << pin_,
 	config.mode = GPIO_MODE_INPUT;
@@ -42,14 +51,6 @@ Debounce::Debounce(gpio_num_t pin, bool active_low,
 	ESP_ERROR_CHECK(gpio_config(&config));
 	change_state_ = (state_ = gpio_get_level(pin_));
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pin_, debounce_interrupt_handler, this));
-}
-
-Debounce::~Debounce() {
-	ESP_ERROR_CHECK(gpio_intr_disable(pin_));
-}
-
-void Debounce::start(WakeupThread &wakeup) {
-	wakeup_ = &wakeup;
 	ESP_ERROR_CHECK(gpio_set_intr_type(pin_, GPIO_INTR_ANYEDGE));
 	ESP_ERROR_CHECK(gpio_intr_enable(pin_));
 }

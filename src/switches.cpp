@@ -52,10 +52,11 @@ Switches::Switches(Network &network, const Config &config, Lights &lights)
 			Debounce{SWITCH_GPIO[3], true, DEBOUNCE_US},
 			Debounce{SWITCH_GPIO[4], true, DEBOUNCE_US},
 		}) {
-	load_rtc_state();
 }
 
 void Switches::setup() {
+	load_rtc_state();
+
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		debounce_[i].start(*this);
 	}
