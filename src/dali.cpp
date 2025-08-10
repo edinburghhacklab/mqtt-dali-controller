@@ -115,7 +115,7 @@ unsigned long Dali::run_tasks() {
 	do {
 		const auto lights = config_.get_addresses();
 		const auto levels = lights_.get_levels();
-		const auto force_refresh = lights_.get_refresh();
+		const auto force_refresh = lights_.get_force_refresh();
 
 		changed = false;
 

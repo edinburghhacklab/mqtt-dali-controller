@@ -107,13 +107,15 @@ std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
 	return levels_;
 }
 
-std::bitset<MAX_ADDR+1> Lights::get_refresh() const {
+std::bitset<MAX_ADDR+1> Lights::get_force_refresh() const {
 	std::lock_guard lock{lights_mutex_};
 	std::bitset<MAX_ADDR+1> refresh;
-	uint64_t now = esp_timer_get_time();
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		refresh[i] = refresh_until_time_us_[i] > now;
+		if (force_refresh_[i]) {
+			refresh[i] = true;
+			force_refresh_[i]--;
+		}
 	}
 
 	return refresh;
@@ -295,12 +297,16 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 	power_known_ |= lights;
 
 	if (on) {
-		if ((power_on_ & lights) != lights) {
-			uint64_t refresh_time_us = esp_timer_get_time() + REFRESH_TIME_US;
+		if ((lights & ~power_on_).any()) {
+			/*
+			 * The lights will already be considered set to the current level so
+			 * it's necessary to force the Dali transmit loop to resend the
+			 * power level in case the lights no longer remember it.
+			 */
 
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (lights[i] && !power_on_[i]) {
-					refresh_until_time_us_[i] = refresh_time_us;
+					force_refresh_[i] = FORCE_REFRESH_COUNT;
 				}
 			}
 
@@ -314,7 +320,7 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 		if ((power_on_ & lights).any()) {
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (lights[i]) {
-					refresh_until_time_us_[i] = 0;
+					force_refresh_[i] = 0;
 				}
 			}
 		}

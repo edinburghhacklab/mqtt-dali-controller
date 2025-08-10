@@ -51,7 +51,7 @@ public:
 	void address_config_changed(const std::string &group);
 
 	std::array<uint8_t,MAX_ADDR+1> get_levels() const;
-	std::bitset<MAX_ADDR+1> get_refresh() const;
+	std::bitset<MAX_ADDR+1> get_force_refresh() const;
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
@@ -62,7 +62,7 @@ private:
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
 	static constexpr uint64_t IDLE_US = 10 * ONE_S;
 	static constexpr uint64_t DIM_REPORT_DELAY_US = 5 * ONE_S;
-	static constexpr uint64_t REFRESH_TIME_US = 2 * ONE_S;
+	static constexpr uint8_t FORCE_REFRESH_COUNT = 2;
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
@@ -92,7 +92,7 @@ private:
 	std::bitset<MAX_ADDR+1> power_on_;
 	std::bitset<MAX_ADDR+1> power_known_;
 	std::array<uint64_t,MAX_ADDR+1> dim_time_us_{};
-	std::array<uint64_t,MAX_ADDR+1> refresh_until_time_us_{};
+	mutable std::array<uint8_t,MAX_ADDR+1> force_refresh_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
 
