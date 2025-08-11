@@ -101,24 +101,22 @@ void Lights::address_config_changed(const std::string &group) {
 	republish_groups_.insert(group);
 }
 
-std::array<uint8_t,MAX_ADDR+1> Lights::get_levels() const {
+LightsState Lights::get_state() const {
 	std::lock_guard lock{lights_mutex_};
-
-	return levels_;
-}
-
-std::bitset<MAX_ADDR+1> Lights::get_force_refresh() const {
-	std::lock_guard lock{lights_mutex_};
-	std::bitset<MAX_ADDR+1> refresh;
+	LightsState state{
+		.addresses{config_.get_addresses()},
+		.levels{levels_},
+		.force_refresh{},
+	};
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 		if (force_refresh_[i]) {
-			refresh[i] = true;
+			state.force_refresh[i] = true;
 			force_refresh_[i]--;
 		}
 	}
 
-	return refresh;
+	return state;
 }
 
 bool Lights::is_idle() {

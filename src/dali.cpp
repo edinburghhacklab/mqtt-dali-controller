@@ -54,6 +54,8 @@ struct rmt_obj_s {
 static constexpr unsigned int RX_GPIO = 40;
 static constexpr unsigned int TX_GPIO = 21;
 
+#define DALI_LOG ESP_LOGD
+
 Dali::Dali(const Config &config, const Lights &lights)
 		: WakeupThread("dali", true), config_(config),
 		lights_(lights) {
@@ -107,26 +109,24 @@ unsigned long Dali::run_tasks() {
 	esp_task_wdt_reset();
 
 	uint64_t start = esp_timer_get_time();
+	LightsState lights = lights_.get_state();
 	uint64_t count = 0;
 	/*
 	 * Set power level for lights that have changed level, cycling through the
 	 * addresses each time to avoid preferring low-numbered lights.
 	 */
 	do {
-		const auto lights = config_.get_addresses();
-		const auto levels = lights_.get_levels();
-		const auto force_refresh = lights_.get_force_refresh();
-
 		changed = false;
 
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				unsigned address = next_address_;
 
-			if (lights[address]
-					&& (force_refresh[address] || levels[address] != tx_levels_[address])) {
-				if (levels[address] > MAX_LEVEL
-						|| tx_power_level(address, levels[address])) {
-					tx_levels_[address] = levels[address];
+			if (lights.addresses[address]
+					&& (lights.force_refresh[address]
+						|| lights.levels[address] != tx_levels_[address])) {
+				if (lights.levels[address] > MAX_LEVEL
+						|| tx_power_level(address, lights.levels[address])) {
+					tx_levels_[address] = lights.levels[address];
 					changed = true;
 					refresh = false;
 					count++;
@@ -137,6 +137,7 @@ unsigned long Dali::run_tasks() {
 
 			next_address_++;
 			next_address_ %= MAX_ADDR + 1;
+			lights = lights_.get_state();
 		}
 	} while (changed);
 
@@ -149,9 +150,6 @@ unsigned long Dali::run_tasks() {
 	}
 
 	if (refresh) {
-		const auto lights = config_.get_addresses();
-		const auto levels = lights_.get_levels();
-
 		/*
 		* Refresh light power levels individually over a short time period,
 		* cycling through the addresses each time to avoid preferring
@@ -161,10 +159,10 @@ unsigned long Dali::run_tasks() {
 		for (unsigned int i = 0; i <= MAX_ADDR && !changed; i++) {
 			unsigned address = next_address_;
 
-			if (lights[address]) {
-				if (levels[address] > MAX_LEVEL
-						|| tx_power_level(address, levels[address])) {
-					tx_levels_[address] = levels[address];
+			if (lights.addresses[address]) {
+				if (lights.levels[address] > MAX_LEVEL
+						|| tx_power_level(address, lights.levels[address])) {
+					tx_levels_[address] = lights.levels[address];
 					changed = true;
 				}
 
@@ -194,7 +192,7 @@ inline size_t Dali::byte_to_symbols(rmt_data_t *symbols, uint8_t value) {
 }
 
 bool Dali::tx_idle() {
-	//ESP_LOGE(TAG, "Idle");
+	DALI_LOG(TAG, "Idle");
 
 	std::array<rmt_data_t,1> symbols{DALI_STOP_IDLE};
 
@@ -207,7 +205,7 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	}
 
 	uint64_t start = esp_timer_get_time();
-	//ESP_LOGE(TAG, "Power level %u = %u", address, level);
+	DALI_LOG(TAG, "Power level %u = %u", address, level);
 
 	/*
 	 * Microchip Technology, AN1465
