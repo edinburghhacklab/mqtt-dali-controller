@@ -307,6 +307,10 @@ void setup() {
 			}
 
 			lights.set_level(light_id, value);
+		} else if (topic_str == "/command/store/power_on_level") {
+			lights.request_broadcast_power_on_level();
+		} else if (topic_str == "/command/store/system_failure_level") {
+			lights.request_broadcast_system_failure_level();
 		}
 
 		yield();
@@ -355,6 +359,8 @@ void loop() {
 		network.subscribe(topic + "/preset/+");
 		network.subscribe(topic + "/preset/+/+");
 		network.subscribe(topic + "/set/+");
+		network.subscribe(topic + "/command/store/power_on_level");
+		network.subscribe(topic + "/command/store/system_failure_level");
 		network.publish("meta/mqtt-agents/announce", network.device_id());
 		network.publish(topic + "/startup_complete", "");
 	});

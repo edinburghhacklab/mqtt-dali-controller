@@ -149,6 +149,22 @@ unsigned long Dali::run_tasks() {
 		stats_.max_burst_us = std::max(stats_.max_burst_us, finish - start);
 	}
 
+	if (lights.broadcast_power_on_level || lights.broadcast_system_failure_level) {
+		if (tx_set_dtr_from_actual_level()) {
+			if (lights.broadcast_power_on_level) {
+				if (tx_set_power_on_level_from_dtr()) {
+					lights_.completed_broadcast_power_on_level();
+				}
+			}
+
+			if (lights.broadcast_system_failure_level) {
+				if (tx_set_system_failure_level_from_dtr()) {
+					lights_.completed_broadcast_system_failure_level();
+				}
+			}
+		}
+	}
+
 	if (refresh) {
 		/*
 		* Refresh light power levels individually over a short time period,
@@ -199,13 +215,8 @@ bool Dali::tx_idle() {
 	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }
 
-bool Dali::tx_power_level(uint8_t address, uint8_t level) {
-	if (address > MAX_ADDR) {
-		return true;
-	}
-
+bool Dali::tx_frame(uint8_t address, uint8_t data) {
 	uint64_t start = esp_timer_get_time();
-	DALI_LOG(TAG, "Power level %u = %u", address, level);
 
 	/*
 	 * Microchip Technology, AN1465
@@ -214,11 +225,8 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	 *
 	 * 1 - Start bit (1 bit: 1)
 	 *
-	 * 8 - Short address (1 bit: 0)
-	 *     Address (6 bits)
-	 *     Selector: direct arc power level (1 bit: 0)
-	 *
-	 * 8 - Power level (8 bits)
+	 * 8 - Address byte (8 bits)
+	 * 8 - Data byte (8 bits)
 	 *
 	 * 1 - Stop bits (2 bits: idle)
 	 *     Time between consecutive forward frames (11 bits: idle)
@@ -227,8 +235,8 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	size_t i = 0;
 
 	symbols[i++] = DALI_1;
-	i += byte_to_symbols(&symbols[i], address << 1);
-	i += byte_to_symbols(&symbols[i], level);
+	i += byte_to_symbols(&symbols[i], address);
+	i += byte_to_symbols(&symbols[i], data);
 	symbols[i++] = DALI_STOP_IDLE;
 	assert(i == symbols.size());
 
@@ -240,4 +248,58 @@ bool Dali::tx_power_level(uint8_t address, uint8_t level) {
 	stats_.max_tx_us = std::max(stats_.max_tx_us, finish - start);
 	stats_.tx_count++;
 	return ret;
+}
+
+bool Dali::tx_power_level(uint8_t address, uint8_t level) {
+	if (address > MAX_ADDR) {
+		return true;
+	}
+
+	DALI_LOG(TAG, "Power level %u = %u", address, level);
+
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Short address (1 bit: 0)
+	 *   Address (6 bits)
+	 *   Selector: direct arc power level (1 bit: 0)
+	 *
+	 * Data:
+	 *   Power level (8 bits)
+	 */
+	return tx_frame((address << 1) | DATA_POWER_LEVEL, level);
+}
+
+bool Dali::tx_broadcast_command(uint8_t command) {
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Broadcast address (7 bits: 1s)
+	 *   Selector: command (1 bit: 1)
+	 *
+	 * Data:
+	 *   Command (8 bits)
+	 */
+	return tx_frame((BROADCAST_ADDRESS << 1) | DATA_COMMAND, command);
+}
+
+bool Dali::tx_set_dtr_from_actual_level() {
+	DALI_LOG(TAG, "Copy actual level to DTR (broadcast)");
+	return tx_broadcast_command(COMMAND_STORE_ACTUAL_LEVEL_IN_DTR);
+}
+
+bool Dali::tx_set_power_on_level_from_dtr() {
+	DALI_LOG(TAG, "Copy DTR to power on level (broadcast)");
+	return tx_broadcast_command(COMMAND_SET_POWER_ON_LEVEL_FROM_DTR);
+}
+
+bool Dali::tx_set_system_failure_level_from_dtr() {
+	DALI_LOG(TAG, "Copy DTR to system failure level (broadcast)");
+	return tx_broadcast_command(COMMAND_SET_SYSTEM_FAILURE_LEVEL_FROM_DTR);
 }

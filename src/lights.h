@@ -38,6 +38,8 @@ struct LightsState {
 	std::bitset<MAX_ADDR+1> addresses;
 	std::array<uint8_t,MAX_ADDR+1> levels;
 	std::bitset<MAX_ADDR+1> force_refresh;
+	bool broadcast_power_on_level;
+	bool broadcast_system_failure_level;
 };
 
 class Lights {
@@ -61,6 +63,11 @@ public:
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
 	void dim_adjust(const std::string &group, long level);
+
+	void request_broadcast_power_on_level();
+	void request_broadcast_system_failure_level();
+	void completed_broadcast_power_on_level() const;
+	void completed_broadcast_system_failure_level() const;
 
 private:
 	static constexpr const char *TAG = "Lights";
@@ -100,6 +107,8 @@ private:
 	mutable std::array<uint8_t,MAX_ADDR+1> force_refresh_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
+	mutable bool broadcast_power_on_level_{false};
+	mutable bool broadcast_system_failure_level_{false};
 
 	std::mutex publish_mutex_;
 	bool startup_complete_{false};

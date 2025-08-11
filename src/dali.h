@@ -124,6 +124,31 @@ private:
 		.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_IDLE,
 	}}};
 
+	static constexpr uint8_t BROADCAST_ADDRESS = 0x7F;
+	static constexpr uint8_t DATA_POWER_LEVEL = 0x00;
+	static constexpr uint8_t DATA_COMMAND = 0x01;
+
+	/*
+	 * https://en.wikipedia.org/wiki/Digital_Addressable_Lighting_Interface
+	 *
+	 * and
+	 *
+	 * Texas Instruments, SLAA422A (2012-10)
+	 * Digital Addressable Lighting Interface (DALI) Implementation Using MSP430 Value Line Microcontrollers
+	 * Page 9
+	 */
+	static constexpr uint8_t COMMAND_TARGET_LEVEL_OFF = 0x00;
+	static constexpr uint8_t COMMAND_STEP_UP = 0x03;
+	static constexpr uint8_t COMMAND_STEP_DOWN = 0x04;
+	static constexpr uint8_t COMMAND_STEP_DOWN_AND_OFF = 0x07;
+	static constexpr uint8_t COMMAND_ON_AND_STEP_UP = 0x08;
+	static constexpr uint8_t COMMAND_RESET = 0x20;
+	static constexpr uint8_t COMMAND_STORE_ACTUAL_LEVEL_IN_DTR = 0x21;
+	static constexpr uint8_t COMMAND_SET_SYSTEM_FAILURE_LEVEL_FROM_DTR = 0x2C;
+	static constexpr uint8_t COMMAND_SET_POWER_ON_LEVEL_FROM_DTR = 0x2D;
+	static constexpr uint8_t COMMAND_ADD_TO_GROUP = 0x60;
+	static constexpr uint8_t COMMAND_REMOVE_FROM_GROUP = 0x70;
+
 	static size_t byte_to_symbols(rmt_data_t *symbols, uint8_t value);
 
 	~Dali() = delete;
@@ -132,7 +157,12 @@ private:
 
 	bool async_ready();
 	bool tx_idle();
+	bool tx_frame(uint8_t address, uint8_t data);
 	bool tx_power_level(uint8_t address, uint8_t level);
+	bool tx_broadcast_command(uint8_t command);
+	bool tx_set_dtr_from_actual_level();
+	bool tx_set_power_on_level_from_dtr();
+	bool tx_set_system_failure_level_from_dtr();
 
 	const Config &config_;
 	const Lights &lights_;

@@ -216,6 +216,21 @@ Idle time (reported every 60 seconds after a change in light levels):
 dali/idle_us <microseconds>
 ```
 
+#### Broadcast command to all lights
+
+Ensure the lights are set to the desired level before using these configuration
+commands.
+
+Set current level as the power on level:
+```
+dali/command/store/power_on_level (null)
+```
+
+Set current level as the system failure level (when DALI bus is disconnected):
+```
+dali/command/store/system_failure_level (null)
+```
+
 ### OTA Updates
 
 Query application, boot and firmware status and output stats:

@@ -107,6 +107,8 @@ LightsState Lights::get_state() const {
 		.addresses{config_.get_addresses()},
 		.levels{levels_},
 		.force_refresh{},
+		.broadcast_power_on_level = broadcast_power_on_level_,
+		.broadcast_system_failure_level = broadcast_system_failure_level_,
 	};
 
 	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
@@ -363,6 +365,42 @@ void Lights::dim_adjust(const std::string &group, long level) {
 
 		publish_levels(true);
 	}
+}
+
+void Lights::request_broadcast_power_on_level() {
+	std::lock_guard lock{lights_mutex_};
+
+	broadcast_power_on_level_ = true;
+
+	network_.report(TAG, "Broadcast configure power on level");
+
+	if (dali_) {
+		dali_->wake_up();
+	}
+}
+
+void Lights::completed_broadcast_power_on_level() const {
+	std::lock_guard lock{lights_mutex_};
+
+	broadcast_power_on_level_ = false;
+}
+
+void Lights::request_broadcast_system_failure_level() {
+	std::lock_guard lock{lights_mutex_};
+
+	broadcast_system_failure_level_ = true;
+
+	network_.report(TAG, "Broadcast configure system failure level");
+
+	if (dali_) {
+		dali_->wake_up();
+	}
+}
+
+void Lights::completed_broadcast_system_failure_level() const {
+	std::lock_guard lock{lights_mutex_};
+
+	broadcast_system_failure_level_ = false;
 }
 
 void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us) {
