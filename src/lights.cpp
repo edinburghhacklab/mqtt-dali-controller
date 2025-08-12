@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <cerrno>
 #include <mutex>
 #include <string>
 #include <unordered_set>
@@ -188,18 +187,15 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	std::array<int16_t,MAX_ADDR+1> preset_levels;
+	unsigned long long ordered_value;
 	bool changed = false;
 
 	if (name.empty()) {
 		return;
 	}
 
-	errno = 0;
-	char *endptr = nullptr;
-	unsigned long long value = std::strtoull(name.c_str(), &endptr, 10);
-
-	if (endptr && !endptr[0] && !errno) {
-		if (!config_.get_ordered_preset(value, name)) {
+	if (ulonglong_from_string(name, ordered_value)) {
+		if (!config_.get_ordered_preset(ordered_value, name)) {
 			return;
 		}
 	}

@@ -34,7 +34,6 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <cerrno>
 #include <mutex>
 #include <iostream>
 #include <sstream>
@@ -1494,11 +1493,9 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 
 			continue;
 		} else if (dash_idx == std::string::npos) {
-			char *endptr = nullptr;
-
-			errno = 0;
-			begin = end = std::strtoul(item.c_str(), &endptr, 10);
-			if (item.empty() || !endptr || endptr[0] || errno) {
+			if (ulong_from_string(item, begin)) {
+				end = begin;
+			} else {
 				continue;
 			}
 		} else {
@@ -1506,24 +1503,12 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 
 			item.resize(dash_idx);
 
-			{
-				char *endptr = nullptr;
-
-				errno = 0;
-				begin = std::strtoul(item.c_str(), &endptr, 10);
-				if (item.empty() || !endptr || endptr[0] || errno) {
-					continue;
-				}
+			if (!ulong_from_string(item, begin)) {
+				continue;
 			}
 
-			{
-				char *endptr = nullptr;
-
-				errno = 0;
-				end = std::strtoul(second.c_str(), &endptr, 10);
-				if (second.empty() || !endptr || endptr[0] || errno) {
-					continue;
-				}
+			if (!ulong_from_string(second, end)) {
+				continue;
 			}
 		}
 

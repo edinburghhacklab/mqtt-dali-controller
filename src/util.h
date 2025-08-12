@@ -26,6 +26,10 @@ static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
 static constexpr uint64_t FIVE_M = 5 * ONE_M;
 
+bool long_from_string(const std::string &text, long &value);
+bool ulong_from_string(const std::string &text, unsigned long &value);
+bool ulonglong_from_string(const std::string &text, unsigned long long &value);
+
 class MemoryDeleter {
 public:
 	void operator()(uint8_t *data) { ::free(data); }

@@ -28,5 +28,5 @@
 RTC_NOINIT_ATTR uint64_t rtc_padding;
 
 static void __attribute__((constructor(1000))) rtc_padding_init() {
-    rtc_padding = 0;
+	rtc_padding = 0;
 }

@@ -22,7 +22,6 @@
 #include <esp_timer.h>
 
 #include <array>
-#include <cerrno>
 #include <cstdlib>
 #include <mutex>
 #include <string>
@@ -188,17 +187,10 @@ void setup() {
 				config.set_switch_preset(4, std::string{(const char*)payload, length});
 			}
 		} else if (topic_str.rfind("/dimmer/", 0) == 0) {
-			long value = 0;
+			long value;
 
-			if (length) {
-				std::string payload_copy = std::string{(const char *)payload, length};
-				char *endptr = nullptr;
-
-				errno = 0;
-				value = std::strtol(payload_copy.c_str(), &endptr, 10);
-				if (!endptr || endptr[0] || errno) {
-					value = 0;
-				}
+			if (!long_from_string(std::string{(const char *)payload, length}, value)) {
+				value = 0;
 			}
 
 			if (topic_str == "/dimmer/0/group") {
@@ -283,12 +275,7 @@ void setup() {
 					long value = -1;
 
 					if (length) {
-						std::string payload_copy = std::string{(const char *)payload, length};
-						char *endptr = nullptr;
-
-						errno = 0;
-						value = std::strtol(payload_copy.c_str(), &endptr, 10);
-						if (!endptr || endptr[0] || errno) {
+						if (!long_from_string(std::string{(const char *)payload, length}, value)) {
 							return;
 						}
 					}
@@ -299,12 +286,9 @@ void setup() {
 		} else if (topic_str.rfind(set_prefix, 0) == 0) {
 			/* "/set/+" */
 			std::string light_id = topic_str.substr(set_prefix.length());
-			std::string payload_copy = std::string{(const char *)payload, length};
-			char *endptr = nullptr;
+			long value;
 
-			errno = 0;
-			long value = std::strtol(payload_copy.c_str(), &endptr, 10);
-			if (!length || !endptr || endptr[0] || errno) {
+			if (!long_from_string(std::string{(const char *)payload, length}, value)) {
 				return;
 			}
 

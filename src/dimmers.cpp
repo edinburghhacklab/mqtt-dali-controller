@@ -34,11 +34,11 @@
 #include "util.h"
 
 static constexpr std::array<std::array<gpio_num_t,2>,NUM_DIMMERS> DIMMER_GPIO{{
-    {(gpio_num_t)1, (gpio_num_t)2},
-    {(gpio_num_t)3, (gpio_num_t)4},
-    {(gpio_num_t)5, (gpio_num_t)6},
-    {(gpio_num_t)7, (gpio_num_t)8},
-    {(gpio_num_t)9, (gpio_num_t)10},
+	{(gpio_num_t)1, (gpio_num_t)2},
+	{(gpio_num_t)3, (gpio_num_t)4},
+	{(gpio_num_t)5, (gpio_num_t)6},
+	{(gpio_num_t)7, (gpio_num_t)8},
+	{(gpio_num_t)9, (gpio_num_t)10},
 }};
 
 Dimmers::Dimmers(Network &network, const Config &config, Lights &lights)
