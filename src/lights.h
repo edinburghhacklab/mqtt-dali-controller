@@ -87,6 +87,7 @@ private:
 	void publish_active_presets();
 	void publish_levels(bool force);
 	void report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us);
+	void clear_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights);
 	bool is_idle();
 
 	void load_rtc_state();

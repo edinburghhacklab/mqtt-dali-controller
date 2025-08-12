@@ -213,7 +213,11 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 		return;
 	}
 
-	report_dimmed_levels(lights, 0);
+	if (internal) {
+		clear_dimmed_levels(lights);
+	} else {
+		report_dimmed_levels(lights, 0);
+	}
 
 	for (int i = 0; i <= MAX_ADDR; i++) {
 		if (addresses[i]) {
@@ -438,6 +442,14 @@ void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_
 		} else {
 			network_.report(TAG, config_.lights_text(dimmed_lights) + " = "
 				+ std::to_string(min_level) + ".." + std::to_string(max_level) + " (dimmer)");
+		}
+	}
+}
+
+void Lights::clear_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights) {
+	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		if (lights[i]) {
+			dim_time_us_[i] = 0;
 		}
 	}
 }
