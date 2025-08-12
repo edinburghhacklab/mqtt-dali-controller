@@ -103,22 +103,28 @@ void Lights::address_config_changed(const std::string &group) {
 
 LightsState Lights::get_state() const {
 	std::lock_guard lock{lights_mutex_};
-	LightsState state{
+
+	return {
 		.addresses{config_.get_addresses()},
 		.levels{levels_},
-		.force_refresh{},
+		.force_refresh{force_refresh_},
 		.broadcast_power_on_level = broadcast_power_on_level_,
 		.broadcast_system_failure_level = broadcast_system_failure_level_,
 	};
+}
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-		if (force_refresh_[i]) {
-			state.force_refresh[i] = true;
-			force_refresh_[i]--;
-		}
+void Lights::completed_force_refresh(unsigned int light_id) const {
+	if (light_id > MAX_ADDR) {
+		return;
 	}
 
-	return state;
+	std::lock_guard lock{lights_mutex_};
+
+	if (force_refresh_count_[light_id] > 0) {
+		force_refresh_count_[light_id]--;
+	}
+
+	force_refresh_[light_id] = force_refresh_count_[light_id] > 0;
 }
 
 bool Lights::is_idle() {
@@ -306,7 +312,8 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (lights[i] && !power_on_[i]) {
-					force_refresh_[i] = FORCE_REFRESH_COUNT;
+					force_refresh_count_[i] = FORCE_REFRESH_COUNT;
+					force_refresh_[i] = true;
 				}
 			}
 
@@ -320,7 +327,8 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 		if ((power_on_ & lights).any()) {
 			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
 				if (lights[i]) {
-					force_refresh_[i] = 0;
+					force_refresh_count_[i] = 0;
+					force_refresh_[i] = false;
 				}
 			}
 		}
@@ -372,7 +380,7 @@ void Lights::request_broadcast_power_on_level() {
 
 	broadcast_power_on_level_ = true;
 
-	network_.report(TAG, "Broadcast configure power on level");
+	network_.report(TAG, "Queued broadcast to configure power on level");
 
 	if (dali_) {
 		dali_->wake_up();
@@ -383,6 +391,8 @@ void Lights::completed_broadcast_power_on_level() const {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_power_on_level_ = false;
+
+	network_.report(TAG, "Completed broadcast to configure power on level");
 }
 
 void Lights::request_broadcast_system_failure_level() {
@@ -390,7 +400,7 @@ void Lights::request_broadcast_system_failure_level() {
 
 	broadcast_system_failure_level_ = true;
 
-	network_.report(TAG, "Broadcast configure system failure level");
+	network_.report(TAG, "Queued broadcast to configure system failure level");
 
 	if (dali_) {
 		dali_->wake_up();
@@ -401,6 +411,8 @@ void Lights::completed_broadcast_system_failure_level() const {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_system_failure_level_ = false;
+
+	network_.report(TAG, "Completed broadcast to configure system failure level");
 }
 
 void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us) {

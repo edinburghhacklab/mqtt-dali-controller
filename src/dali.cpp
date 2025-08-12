@@ -130,6 +130,10 @@ unsigned long Dali::run_tasks() {
 					changed = true;
 					refresh = false;
 					count++;
+
+					if (lights.force_refresh[address]) {
+						lights_.completed_force_refresh(address);
+					}
 				}
 
 				esp_task_wdt_reset();

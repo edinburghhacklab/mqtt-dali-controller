@@ -59,6 +59,7 @@ public:
 	void address_config_changed(const std::string &group);
 
 	LightsState get_state() const;
+	void completed_force_refresh(unsigned int light_id) const;
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
@@ -101,14 +102,15 @@ private:
 
 	mutable std::recursive_mutex lights_mutex_;
 	std::array<uint8_t,MAX_ADDR+1> levels_{};
+	mutable std::bitset<MAX_ADDR+1> force_refresh_;
+	mutable bool broadcast_power_on_level_{false};
+	mutable bool broadcast_system_failure_level_{false};
 	std::bitset<MAX_ADDR+1> power_on_;
 	std::bitset<MAX_ADDR+1> power_known_;
 	std::array<uint64_t,MAX_ADDR+1> dim_time_us_{};
-	mutable std::array<uint8_t,MAX_ADDR+1> force_refresh_{};
+	mutable std::array<uint8_t,MAX_ADDR+1> force_refresh_count_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
-	mutable bool broadcast_power_on_level_{false};
-	mutable bool broadcast_system_failure_level_{false};
 
 	std::mutex publish_mutex_;
 	bool startup_complete_{false};
