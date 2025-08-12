@@ -48,14 +48,14 @@ Network::Network()
 void Network::report(const char *tag, const std::string &message) {
 	ESP_LOGE(tag, "%s", message.c_str());
 
-	if (IRC_CHANNEL[0]) {
+	if (FixedConfig::hasChannel()) {
 		std::string payload;
 
 		payload.reserve(Message::BUFFER_SIZE);
 		payload += "{\"to\": \"";
-		json_append_escape(payload, IRC_CHANNEL);
+		json_append_escape(payload, FixedConfig::ircChannel());
 		payload += "\", \"message\": \"";
-		json_append_escape(payload, MQTT_TOPIC);
+		json_append_escape(payload, FixedConfig::mqttTopic());
 		json_append_escape(payload, ": ");
 		json_append_escape(payload, message);
 		payload += + "\"}";
@@ -107,12 +107,12 @@ void Network::send_queued_messages() {
 	lock.unlock();
 
 	if (dropped) {
-		mqtt_.publish((std::string{MQTT_TOPIC} + "/stats/dropped_messages").c_str(),
+		mqtt_.publish(FixedConfig::mqttTopic("/stats/dropped_messages").c_str(),
 			std::to_string(dropped).c_str());
 	}
 
 	if (oversized) {
-		mqtt_.publish((std::string{MQTT_TOPIC} + "/stats/oversized_messages").c_str(),
+		mqtt_.publish(FixedConfig::mqttTopic("/stats/oversized_messages").c_str(),
 			std::to_string(oversized).c_str());
 	}
 
@@ -140,7 +140,7 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 	std::string hostname = WiFi.getHostname();
 	auto idx = hostname.find("-");
 	if (idx != std::string::npos) {
-		hostname = WIFI_HOSTNAME + hostname.substr(idx);
+		hostname = FixedConfig::wifiHostname() + hostname.substr(idx);
 		ESP_LOGE(TAG, "Hostname = %s", hostname.c_str());
 		WiFi.setHostname(hostname.c_str());
 	}
@@ -149,7 +149,7 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 	WiFi.setSleep(false);
 	WiFi.mode(WIFI_STA);
 
-	mqtt_.setServer(MQTT_HOSTNAME, MQTT_PORT);
+	mqtt_.setServer(FixedConfig::mqttHostname(), FixedConfig::mqttPort());
 	mqtt_.setBufferSize(Message::BUFFER_SIZE);
 	mqtt_.setCallback(callback);
 }
@@ -164,7 +164,7 @@ void Network::loop(std::function<void()> connected) {
 		if (!last_wifi_us_ || wifi_up_ || esp_timer_get_time() - last_wifi_us_ > 30 * ONE_S) {
 			ESP_LOGE(TAG, "WiFi reconnect");
 			WiFi.disconnect();
-			WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+			WiFi.begin(FixedConfig::wifiSSID(), FixedConfig::wifiPassword());
 			last_wifi_us_ = esp_timer_get_time();
 			wifi_up_ = false;
 		}

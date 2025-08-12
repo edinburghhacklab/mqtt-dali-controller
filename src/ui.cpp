@@ -92,7 +92,7 @@ void UI::status_report() {
 
 void UI::publish_application() {
 	const esp_app_desc_t *desc = esp_ota_get_app_description();
-	std::string topic = std::string{MQTT_TOPIC} + "/application";
+	std::string topic = FixedConfig::mqttTopic("/application");
 
 	network_.publish(topic + "/name", null_terminated_string(desc->project_name));
 	network_.publish(topic + "/version", null_terminated_string(desc->version));
@@ -101,7 +101,7 @@ void UI::publish_application() {
 }
 
 void UI::publish_boot() {
-	std::string topic = std::string{MQTT_TOPIC} + "/boot";
+	std::string topic = FixedConfig::mqttTopic("/boot");
 
 	network_.publish(topic + "/reset_reason/0", std::to_string(rtc_get_reset_reason(0)));
 	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)));
@@ -128,7 +128,7 @@ void UI::publish_partitions() {
 	for (int i = 0; i < esp_ota_get_app_partition_count(); i++, part = esp_ota_get_next_update_partition(part)) {
 		esp_app_desc_t desc;
 		esp_ota_img_states_t state;
-		std::string topic = std::string{MQTT_TOPIC} + "/partition/";
+		std::string topic = FixedConfig::mqttTopic("/partition/");
 
 		if (esp_ota_get_state_partition(part, &state)) {
 			state = ESP_OTA_IMG_UNDEFINED;
@@ -161,7 +161,7 @@ void UI::publish_partitions() {
 }
 
 void UI::publish_stats() {
-	std::string topic = std::string{MQTT_TOPIC} + "/stats";
+	std::string topic = FixedConfig::mqttTopic("/stats");
 
 	if (dali_) {
 		DaliStats dali_stats = dali_->get_stats();
@@ -239,7 +239,7 @@ void UI::ota_update() {
 
 	http_config.crt_bundle_attach = arduino_esp_crt_bundle_attach;
 	http_config.disable_auto_redirect = true;
-	http_config.url = OTA_URL;
+	http_config.url = FixedConfig::otaURL();
 	ota_config.http_config = &http_config;
 
 	esp_err_t err = esp_https_ota_begin(&ota_config, &handle);

@@ -473,7 +473,7 @@ void Lights::publish_active_presets() {
 					}
 				}
 
-				network_.publish(std::string{MQTT_TOPIC} + "/active/"
+				network_.publish(FixedConfig::mqttTopic("/active/")
 					+ group + "/" + preset,
 					is_active ? "1" : "0", true);
 			}
@@ -522,10 +522,10 @@ void Lights::publish_levels(bool force) {
 		offset += 3;
 	}
 
-	network_.publish(std::string{MQTT_TOPIC} + "/levels",
+	network_.publish(FixedConfig::mqttTopic("/levels"),
 		{buffer.data(), offset}, true);
 	if (!force) {
-		network_.publish(std::string{MQTT_TOPIC} + "/idle_us",
+		network_.publish(FixedConfig::mqttTopic("/idle_us"),
 			std::to_string(esp_timer_get_time() - last_activity_us_));
 	}
 	last_publish_levels_us_ = esp_timer_get_time();

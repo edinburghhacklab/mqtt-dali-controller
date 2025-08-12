@@ -141,8 +141,8 @@ void Switches::publish_switch(unsigned int switch_id, const std::string &group) 
 		lights_.set_power(config_.get_group_addresses(group),
 			state_[switch_id].active);
 
-		network_.publish(std::string{MQTT_TOPIC}
-			+ "/switch/" + std::to_string(switch_id) + "/state",
+		network_.publish(FixedConfig::mqttTopic("/switch/")
+			+ std::to_string(switch_id) + "/state",
 			state_[switch_id].active ? "1" : "0", true);
 		state_[switch_id].report_us = esp_timer_get_time();
 	}

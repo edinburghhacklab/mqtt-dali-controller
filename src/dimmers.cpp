@@ -120,7 +120,7 @@ void Dimmers::publish_debug(unsigned int dimmer_id) {
 		return;
 	}
 
-	std::string topic = std::string{MQTT_TOPIC} + "/dimmer/"
+	std::string topic = FixedConfig::mqttTopic("/dimmer/")
 		+ std::to_string(dimmer_id) + "/debug_log";
 
 	encoder_[dimmer_id].debug(records);

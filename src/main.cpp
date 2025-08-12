@@ -38,6 +38,8 @@
 
 static constexpr const char *TAG = "main";
 
+std::string FixedConfig::mqtt_topic_str{FixedConfig::MQTT_TOPIC};
+
 /**
  * LittleFS is NOT thread-safe. Lock this global mutex when accessing the
  * filesystem.
@@ -114,8 +116,8 @@ void setup() {
 		if (topic_str == "meta/mqtt-agents/poll") {
 			network.publish("meta/mqtt-agents/reply", network.device_id());
 			topic_str.clear();
-		} else if (topic_str.rfind(MQTT_TOPIC, 0) == 0) {
-			topic_str = topic_str.substr(strlen(MQTT_TOPIC));
+		} else if (topic_str.rfind(FixedConfig::mqttTopic(), 0) == 0) {
+			topic_str = topic_str.substr(FixedConfig::mqttTopic().size());
 		} else {
 			topic_str.clear();
 		}
@@ -336,7 +338,7 @@ void loop() {
 	ui.loop();
 
 	network.loop([] () {
-		std::string topic = MQTT_TOPIC;
+		std::string topic{FixedConfig::mqttTopic()};
 
 		set_startup_complete(false);
 

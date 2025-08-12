@@ -277,9 +277,9 @@ bool ConfigFile::read_config(const std::string &filename, bool load) {
 				if (read_config(reader)) {
 					CFG_LOG(TAG, "Loaded config from file %s", filename.c_str());
 					uint64_t finish = esp_timer_get_time();
-					network_.publish(std::string{MQTT_TOPIC} + "/loaded_config", filename);
-					network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
-					network_.publish(std::string{MQTT_TOPIC} + "/config_read_time_us", std::to_string(finish - start));
+					network_.publish(FixedConfig::mqttTopic("/loaded_config"), filename);
+					network_.publish(FixedConfig::mqttTopic("/config_size"), std::to_string(file.size()), true);
+					network_.publish(FixedConfig::mqttTopic("/config_read_time_us"), std::to_string(finish - start));
 				} else {
 					ESP_LOGE(TAG, "Invalid config file %s", filename.c_str());
 				}
@@ -806,9 +806,9 @@ bool ConfigFile::write_config(const std::string &filename) const {
 		if (file) {
 			CFG_LOG(TAG, "Saved config to file %s", filename.c_str());
 			uint64_t finish = esp_timer_get_time();
-			network_.publish(std::string{MQTT_TOPIC} + "/saved_config", filename);
-			network_.publish(std::string{MQTT_TOPIC} + "/config_size", std::to_string(file.size()), true);
-			network_.publish(std::string{MQTT_TOPIC} + "/config_write_time_us", std::to_string(finish - start));
+			network_.publish(FixedConfig::mqttTopic("/saved_config"), filename);
+			network_.publish(FixedConfig::mqttTopic("/config_size"), std::to_string(file.size()), true);
+			network_.publish(FixedConfig::mqttTopic("/config_write_time_us"), std::to_string(finish - start));
 			return true;
 		} else {
 			network_.report(TAG, std::string{"Unable to open config file "} + filename + " for reading");
@@ -896,16 +896,16 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 void Config::publish_config() const {
 	std::lock_guard lock{data_mutex_};
 
-	network_.publish(std::string{MQTT_TOPIC} + "/addresses",
+	network_.publish(FixedConfig::mqttTopic("/addresses"),
 		addresses_text(current_.lights), true);
 
 	for (const auto &group : current_.groups) {
-		network_.publish(std::string{MQTT_TOPIC} + "/group/" + group.first,
+		network_.publish(FixedConfig::mqttTopic("/group/") + group.first,
 			addresses_text(group.second), true);
 	}
 
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		auto switch_prefix = std::string{MQTT_TOPIC} + "/switch/" + std::to_string(i);
+		auto switch_prefix = FixedConfig::mqttTopic("/switch/") + std::to_string(i);
 
 		network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
 		network_.publish(switch_prefix + "/group", current_.switches[i].group, true);
@@ -913,7 +913,7 @@ void Config::publish_config() const {
 	}
 
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		auto dimmer_prefix = std::string{MQTT_TOPIC} + "/dimmer/" + std::to_string(i);
+		auto dimmer_prefix = FixedConfig::mqttTopic("/dimmer/") + std::to_string(i);
 
 		network_.publish(dimmer_prefix + "/group", current_.dimmers[i].group, true);
 		network_.publish(dimmer_prefix + "/encoder_steps", std::to_string(current_.dimmers[i].encoder_steps), true);
@@ -924,12 +924,12 @@ void Config::publish_config() const {
 		publish_preset(preset.first, preset.second);
 	}
 
-	network_.publish(std::string{MQTT_TOPIC} + "/preset/order",
+	network_.publish(FixedConfig::mqttTopic("/preset/order"),
 		vector_text(current_.ordered), true);
 }
 
 void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const {
-	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels",
+	network_.publish(FixedConfig::mqttTopic("/preset/") + name + "/levels",
 		preset_levels_text(levels, nullptr), true);
 }
 
@@ -1043,12 +1043,12 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 	if (before != after) {
 		if (group == BUILTIN_GROUP_ALL) {
 			CFG_LOG(TAG, "Configure light addresses: %s", addresses.c_str());
-			network_.publish(std::string{MQTT_TOPIC} + "/addresses", after, true);
+			network_.publish(FixedConfig::mqttTopic("/addresses"), after, true);
 			network_.report(TAG, std::string{"Addresses: "}
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		} else {
 			CFG_LOG(TAG, "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
-			network_.publish(std::string{MQTT_TOPIC} + "/group/" + group, after, true);
+			network_.publish(FixedConfig::mqttTopic("/group/") + group, after, true);
 			network_.report(TAG, std::string{"Group "} + group + " addresses: "
 				+ quoted_string(before) + " -> " + quoted_string(after));
 		}
@@ -1070,9 +1070,9 @@ void Config::delete_group(const std::string &name) {
 		+ quoted_string(group_addresses_text(name)) + " (deleted)");
 
 	current_.groups.erase(it);
-	network_.publish(std::string{MQTT_TOPIC} + "/group/" + name, "", true);
+	network_.publish(FixedConfig::mqttTopic("/group/") + name, "", true);
 	for (const auto &preset : preset_names()) {
-		network_.publish(std::string{MQTT_TOPIC} + "/active/" + name + "/" + preset, "", true);
+		network_.publish(FixedConfig::mqttTopic("/active/") + name + "/" + preset, "", true);
 	}
 
 	dirty_config();
@@ -1457,9 +1457,9 @@ void Config::delete_preset(const std::string &name) {
 
 	current_.presets.erase(it);
 
-	network_.publish(std::string{MQTT_TOPIC} + "/preset/" + name + "/levels", "", true);
+	network_.publish(FixedConfig::mqttTopic("/preset/") + name + "/levels", "", true);
 	for (const auto &group : group_names()) {
-		network_.publish(std::string{MQTT_TOPIC} + "/active/" + group + "/" + name, "", true);
+		network_.publish(FixedConfig::mqttTopic("/active/") + group + "/" + name, "", true);
 	}
 
 	dirty_config();

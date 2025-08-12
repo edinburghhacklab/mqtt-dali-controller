@@ -20,6 +20,7 @@
 #include <Arduino.h>
 
 #include <memory>
+#include <string>
 
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
@@ -39,8 +40,30 @@ enum BootRTCStatus {
 	LOADED_OK,
 };
 
+class FixedConfig {
+public:
+	FixedConfig() = default;
+
+	static inline const char *wifiHostname() { return WIFI_HOSTNAME; }
+	static inline const char *wifiSSID() { return WIFI_SSID; }
+	static inline const char *wifiPassword() { return WIFI_PASSWORD; }
+
+	static inline const char *mqttHostname() { return MQTT_HOSTNAME; }
+	static inline int mqttPort() { return MQTT_PORT; }
+	static inline const std::string_view mqttTopic() { return mqtt_topic_str; }
+	static std::string mqttTopic(const char *append) { return mqtt_topic_str + append; }
+
+	static inline bool hasChannel() { return IRC_CHANNEL[0]; }
+	static inline const char *ircChannel() { return IRC_CHANNEL; }
+
+	static inline const char *otaURL() { return OTA_URL; }
+
+private:
+	static std::string mqtt_topic_str;
+
 #if __has_include("fixed_config.h")
 # include "fixed_config.h"
 #else
 # include "fixed_config.h.example"
 #endif
+};
