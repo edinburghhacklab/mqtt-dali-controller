@@ -94,24 +94,24 @@ void UI::publish_application() {
 	const esp_app_desc_t *desc = esp_ota_get_app_description();
 	std::string topic = FixedConfig::mqttTopic("/application");
 
-	network_.publish(topic + "/name", null_terminated_string(desc->project_name));
-	network_.publish(topic + "/version", null_terminated_string(desc->version));
-	network_.publish(topic + "/idf_ver", null_terminated_string(desc->idf_ver));
-	network_.publish(topic + "/timestamp", null_terminated_string(desc->date) + " " + null_terminated_string(desc->time));
+	network_.publish(topic + "/name", null_terminated_string(desc->project_name), true);
+	network_.publish(topic + "/version", null_terminated_string(desc->version), true);
+	network_.publish(topic + "/idf_ver", null_terminated_string(desc->idf_ver), true);
+	network_.publish(topic + "/timestamp", null_terminated_string(desc->date) + " " + null_terminated_string(desc->time), true);
 }
 
 void UI::publish_boot() {
 	std::string topic = FixedConfig::mqttTopic("/boot");
 
-	network_.publish(topic + "/reset_reason/0", std::to_string(rtc_get_reset_reason(0)));
-	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)));
-	network_.publish(topic + "/wakeup_cause", std::to_string(rtc_get_wakeup_cause()));
+	network_.publish(topic + "/reset_reason/0", std::to_string(rtc_get_reset_reason(0)), true);
+	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)), true);
+	network_.publish(topic + "/wakeup_cause", std::to_string(rtc_get_wakeup_cause()), true);
 
-	network_.publish(topic + "/rtc/lights",
-		Lights::rtc_boot_memory() + " -> " + boot_rtc_status_string(lights_.rtc_boot_status()));
+	network_.publish(topic + "/lights",
+		Lights::rtc_boot_memory() + " -> " + boot_rtc_status_string(lights_.rtc_boot_status()), true);
 	if (switches_) {
-		network_.publish(topic + "/rtc/switches",
-			Switches::rtc_boot_memory() + " -> " + boot_rtc_status_string(switches_->rtc_boot_status()));
+		network_.publish(topic + "/switches",
+			Switches::rtc_boot_memory() + " -> " + boot_rtc_status_string(switches_->rtc_boot_status()), true);
 	}
 }
 
