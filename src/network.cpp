@@ -134,7 +134,8 @@ size_t Network::maximum_queue_size() {
 	return size;
 }
 
-void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback) {
+void Network::setup(std::function<void()> connected,
+		std::function<void(char*, uint8_t*, unsigned int)> receive) {
 	WiFi.persistent(false);
 
 	std::string hostname = WiFi.getHostname();
@@ -149,12 +150,13 @@ void Network::setup(std::function<void(char*, uint8_t*, unsigned int)> callback)
 	WiFi.setSleep(false);
 	WiFi.mode(WIFI_STA);
 
+	connected_ = connected;
 	mqtt_.setServer(FixedConfig::mqttHostname(), FixedConfig::mqttPort());
 	mqtt_.setBufferSize(Message::BUFFER_SIZE);
-	mqtt_.setCallback(callback);
+	mqtt_.setCallback(receive);
 }
 
-void Network::loop(std::function<void()> connected) {
+void Network::loop() {
 	switch (WiFi.status()) {
 	case WL_IDLE_STATUS:
 	case WL_NO_SSID_AVAIL:
@@ -192,7 +194,9 @@ void Network::loop(std::function<void()> connected) {
 
 			if (mqtt_.connected()) {
 				ESP_LOGE(TAG, "MQTT connected");
-				connected();
+				if (connected_) {
+					connected_();
+				}
 			} else {
 				ESP_LOGE(TAG, "MQTT connection failed");
 			}

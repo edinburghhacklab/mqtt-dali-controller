@@ -58,8 +58,9 @@ class Network {
 public:
 	Network();
 
-	void setup(std::function<void(char*, uint8_t*, unsigned int)> mqtt_callback);
-	void loop(std::function<void()> connected);
+	void setup(std::function<void()> connected,
+		std::function<void(char*, uint8_t*, unsigned int)> receive);
+	void loop();
 	inline std::string device_id() { return device_id_.c_str(); }
 	inline bool connected() { return wifi_up_ && mqtt_.connected(); }
 	void report(const char *tag, const std::string &message);
@@ -79,6 +80,8 @@ private:
 	uint64_t last_wifi_us_{0};
 	bool wifi_up_{false};
 	uint64_t last_mqtt_us_{0};
+
+	std::function<void()> connected_;
 
 	std::mutex messages_mutex_;
 	std::deque<Message> message_queue_;

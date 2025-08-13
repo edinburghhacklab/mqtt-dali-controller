@@ -21,12 +21,11 @@
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 
-#include <array>
-#include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <string>
-#include <unordered_set>
 
+#include "api.h"
 #include "dali.h"
 #include "config.h"
 #include "lights.h"
@@ -49,15 +48,9 @@ static Network network;
 static Config config{file_mutex, network};
 static Lights lights{network, config};
 static UI ui{file_mutex, network, lights};
-static bool startup_complete{false};
+static API *api{nullptr};
 static bool startup_watchdog{false};
 static bool startup_watchdog_failed{false};
-
-static void set_startup_complete(bool state) {
-	startup_complete = state;
-	lights.startup_complete(state);
-	ui.startup_complete(state);
-}
 
 static bool ota_verification_pending() {
 	esp_ota_img_states_t state;
@@ -82,6 +75,8 @@ bool testSPIRAM() {
 }
 
 void setup() {
+	using namespace std::placeholders;
+
 	if (ota_verification_pending()) {
 		ESP_LOGE(TAG, "Startup watchdog started: OTA verification pending");
 		ESP_ERROR_CHECK(esp_task_wdt_add(nullptr));
@@ -93,6 +88,7 @@ void setup() {
 	Switches &switches = *new Switches{network, config, lights};
 	Dimmers &dimmers = *new Dimmers{network, config, lights};
 	Dali &dali = *new Dali{config, lights};
+	api = new API{file_mutex, network, config, dali, dimmers, lights, ui};
 
 	dali.setup();
 	config.setup();
@@ -106,207 +102,13 @@ void setup() {
 	ui.set_dali(dali);
 	ui.set_switches(switches);
 
-	network.setup([&dali, &dimmers] (const char *topic, const uint8_t *payload, unsigned int length) {
-		static const std::string group_prefix = "/group/";
-		static const std::string preset_prefix = "/preset/";
-		static const std::string set_prefix = "/set/";
-		std::string topic_str = topic;
-
-		if (topic_str == "meta/mqtt-agents/poll") {
-			network.publish("meta/mqtt-agents/reply", network.device_id());
-			topic_str.clear();
-		} else if (topic_str.rfind(FixedConfig::mqttTopic(), 0) == 0) {
-			topic_str = topic_str.substr(FixedConfig::mqttTopic().size());
-		} else {
-			topic_str.clear();
-		}
-
-		if (topic_str == "") {
-			/* Do nothing */
-		} else if (topic_str == "/startup_complete") {
-			if (!startup_complete) {
-				ESP_LOGE(TAG, "Startup complete");
-				set_startup_complete(true);
-				config.save_config();
-				config.publish_config();
-			}
-		} else if (topic_str == "/reboot") {
-			config.save_config();
-
-			std::lock_guard lock{file_mutex};
-
-			esp_restart();
-		} else if (topic_str == "/reload") {
-			config.load_config();
-			config.save_config();
-			config.publish_config();
-			lights.address_config_changed();
-			dali.wake_up();
-		} else if (topic_str == "/status") {
-			ui.status_report();
-		} else if (topic_str == "/ota/update") {
-			ui.ota_update();
-		} else if (topic_str == "/ota/good") {
-			ui.ota_good();
-		} else if (topic_str == "/ota/bad") {
-			ui.ota_bad();
-		} else if (topic_str == "/addresses") {
-			config.set_addresses(std::string{(const char*)payload, length});
-			lights.address_config_changed(BUILTIN_GROUP_ALL);
-			dali.wake_up();
-		} else if (topic_str.rfind("/switch/", 0) == 0) {
-			if (topic_str == "/switch/0/group") {
-				config.set_switch_group(0, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/1/group") {
-				config.set_switch_group(1, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/2/group") {
-				config.set_switch_group(2, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/3/group") {
-				config.set_switch_group(3, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/4/group") {
-				config.set_switch_group(4, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/0/name") {
-				config.set_switch_name(0, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/1/name") {
-				config.set_switch_name(1, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/2/name") {
-				config.set_switch_name(2, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/3/name") {
-				config.set_switch_name(3, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/4/name") {
-				config.set_switch_name(4, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/0/preset") {
-				config.set_switch_preset(0, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/1/preset") {
-				config.set_switch_preset(1, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/2/preset") {
-				config.set_switch_preset(2, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/3/preset") {
-				config.set_switch_preset(3, std::string{(const char*)payload, length});
-			} else if (topic_str == "/switch/4/preset") {
-				config.set_switch_preset(4, std::string{(const char*)payload, length});
-			}
-		} else if (topic_str.rfind("/dimmer/", 0) == 0) {
-			long value;
-
-			if (!long_from_string(std::string{(const char *)payload, length}, value)) {
-				value = 0;
-			}
-
-			if (topic_str == "/dimmer/0/group") {
-				config.set_dimmer_group(0, std::string{(const char*)payload, length});
-			} else if (topic_str == "/dimmer/1/group") {
-				config.set_dimmer_group(1, std::string{(const char*)payload, length});
-			} else if (topic_str == "/dimmer/2/group") {
-				config.set_dimmer_group(2, std::string{(const char*)payload, length});
-			} else if (topic_str == "/dimmer/3/group") {
-				config.set_dimmer_group(3, std::string{(const char*)payload, length});
-			} else if (topic_str == "/dimmer/4/group") {
-				config.set_dimmer_group(4, std::string{(const char*)payload, length});
-			} else if (topic_str == "/dimmer/0/encoder_steps") {
-				config.set_dimmer_encoder_steps(0, value);
-			} else if (topic_str == "/dimmer/1/encoder_steps") {
-				config.set_dimmer_encoder_steps(1, value);
-			} else if (topic_str == "/dimmer/2/encoder_steps") {
-				config.set_dimmer_encoder_steps(2, value);
-			} else if (topic_str == "/dimmer/3/encoder_steps") {
-				config.set_dimmer_encoder_steps(3, value);
-			} else if (topic_str == "/dimmer/4/encoder_steps") {
-				config.set_dimmer_encoder_steps(4, value);
-			} else if (topic_str == "/dimmer/0/level_steps") {
-				config.set_dimmer_level_steps(0, value);
-			} else if (topic_str == "/dimmer/1/level_steps") {
-				config.set_dimmer_level_steps(1, value);
-			} else if (topic_str == "/dimmer/2/level_steps") {
-				config.set_dimmer_level_steps(2, value);
-			} else if (topic_str == "/dimmer/3/level_steps") {
-				config.set_dimmer_level_steps(3, value);
-			} else if (topic_str == "/dimmer/4/level_steps") {
-				config.set_dimmer_level_steps(4, value);
-			} else if (topic_str == "/dimmer/0/get_debug") {
-				dimmers.publish_debug(0);
-			} else if (topic_str == "/dimmer/1/get_debug") {
-				dimmers.publish_debug(1);
-			} else if (topic_str == "/dimmer/2/get_debug") {
-				dimmers.publish_debug(2);
-			} else if (topic_str == "/dimmer/3/get_debug") {
-				dimmers.publish_debug(3);
-			} else if (topic_str == "/dimmer/4/get_debug") {
-				dimmers.publish_debug(4);
-			}
-		} else if (topic_str.rfind(group_prefix, 0) == 0) {
-			/* "/group/+" */
-			std::string group_name = topic_str.substr(group_prefix.length());
-
-			if (length) {
-				config.set_group_addresses(group_name, std::string{(const char *)payload, length});
-				lights.address_config_changed(group_name);
-			} else {
-				config.delete_group(group_name);
-			}
-		} else if (topic_str.rfind(preset_prefix, 0) == 0) {
-			std::string preset_name = topic_str.substr(preset_prefix.length());
-			auto idx = preset_name.find("/");
-
-			if (idx == std::string::npos) {
-				/* "/preset/+" */
-				std::string payload_copy = std::string{(const char *)payload, length};
-
-				if (preset_name == RESERVED_PRESET_ORDER) {
-					config.set_ordered_presets(payload_copy);
-				} else {
-					if (payload_copy.empty()) {
-						payload_copy = BUILTIN_GROUP_ALL;
-					}
-
-					lights.select_preset(preset_name, payload_copy);
-				}
-			} else {
-				/* "/preset/+/+" */
-				std::string light_id = preset_name.substr(idx + 1);
-
-				preset_name = preset_name.substr(0, idx);
-
-				if (light_id == RESERVED_GROUP_DELETE) {
-					config.delete_preset(preset_name);
-				} else if (light_id == RESERVED_GROUP_LEVELS) {
-					config.set_preset(preset_name, std::string{(const char *)payload, length});
-				} else {
-					long value = -1;
-
-					if (length) {
-						if (!long_from_string(std::string{(const char *)payload, length}, value)) {
-							return;
-						}
-					}
-
-					config.set_preset(preset_name, light_id, value);
-				}
-			}
-		} else if (topic_str.rfind(set_prefix, 0) == 0) {
-			/* "/set/+" */
-			std::string light_id = topic_str.substr(set_prefix.length());
-			long value;
-
-			if (!long_from_string(std::string{(const char *)payload, length}, value)) {
-				return;
-			}
-
-			lights.set_level(light_id, value);
-		} else if (topic_str == "/command/store/power_on_level") {
-			lights.request_broadcast_power_on_level();
-		} else if (topic_str == "/command/store/system_failure_level") {
-			lights.request_broadcast_system_failure_level();
-		}
-
-		yield();
-		network.send_queued_messages();
-	});
+	network.setup(std::bind(&API::connected, api),
+		std::bind(&API::receive, api, _1, _2, _3));
 }
 
 void loop() {
 	if (startup_watchdog) {
-		if (startup_complete) {
+		if (api->startup_complete()) {
 			ESP_LOGE(TAG, "Startup watchdog cancelled");
 			esp_task_wdt_delete(nullptr);
 			startup_watchdog = false;
@@ -320,35 +122,6 @@ void loop() {
 
 	lights.loop();
 	ui.loop();
-
-	network.loop([] () {
-		std::string topic{FixedConfig::mqttTopic()};
-
-		set_startup_complete(false);
-
-		network.subscribe(topic + "/startup_complete");
-		network.subscribe("meta/mqtt-agents/poll");
-		network.subscribe(topic + "/reboot");
-		network.subscribe(topic + "/reload");
-		network.subscribe(topic + "/status");
-		network.subscribe(topic + "/idle/");
-		network.subscribe(topic + "/ota/+");
-		network.subscribe(topic + "/addresses");
-		network.subscribe(topic + "/group/+");
-		network.subscribe(topic + "/switch/+/group");
-		network.subscribe(topic + "/switch/+/name");
-		network.subscribe(topic + "/switch/+/preset");
-		network.subscribe(topic + "/dimmer/+/group");
-		network.subscribe(topic + "/dimmer/+/encoder_steps");
-		network.subscribe(topic + "/dimmer/+/level_steps");
-		network.subscribe(topic + "/dimmer/+/get_debug");
-		network.subscribe(topic + "/preset/+");
-		network.subscribe(topic + "/preset/+/+");
-		network.subscribe(topic + "/set/+");
-		network.subscribe(topic + "/command/store/power_on_level");
-		network.subscribe(topic + "/command/store/system_failure_level");
-		network.publish("meta/mqtt-agents/announce", network.device_id());
-		network.publish(topic + "/startup_complete", "");
-	});
+	network.loop();
 	config.loop();
 }
