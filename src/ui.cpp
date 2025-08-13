@@ -292,6 +292,7 @@ void UI::ota_result(bool good) {
 		if (good) {
 			ESP_LOGE(TAG, "OTA good");
 			esp_ota_mark_app_valid_cancel_rollback();
+			publish_partitions();
 		} else {
 			ESP_LOGE(TAG, "OTA bad");
 			esp_ota_mark_app_invalid_rollback_and_reboot();
