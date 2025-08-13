@@ -26,7 +26,6 @@
 #include <FS.h>
 #include <LittleFS.h>
 
-#include <cstring>
 #include <mutex>
 #include <string>
 
@@ -52,12 +51,6 @@ void UI::startup_complete(bool state) {
 		status_report();
 	}
 }
-
-template<typename T, size_t size>
-static inline std::string null_terminated_string(T(&data)[size]) {
-	T *found = reinterpret_cast<T*>(std::memchr(&data[0], '\0', size));
-	return std::string{&data[0], found ? (found - &data[0]) : size};
-};
 
 static const char *ota_state_string(esp_ota_img_states_t state) {
 	switch (state) {
@@ -293,6 +286,7 @@ void UI::ota_result(bool good) {
 			ESP_LOGE(TAG, "OTA good");
 			esp_ota_mark_app_valid_cancel_rollback();
 			publish_partitions();
+			network_.report(TAG, "OTA good");
 		} else {
 			ESP_LOGE(TAG, "OTA bad");
 			esp_ota_mark_app_invalid_rollback_and_reboot();

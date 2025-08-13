@@ -19,6 +19,7 @@
 
 #include <Arduino.h>
 
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -29,6 +30,12 @@ static constexpr uint64_t FIVE_M = 5 * ONE_M;
 bool long_from_string(const std::string &text, long &value);
 bool ulong_from_string(const std::string &text, unsigned long &value);
 bool ulonglong_from_string(const std::string &text, unsigned long long &value);
+
+template<typename T, size_t size>
+static inline std::string null_terminated_string(T(&data)[size]) {
+	T *found = reinterpret_cast<T*>(std::memchr(&data[0], '\0', size));
+	return std::string{&data[0], found ? (found - &data[0]) : size};
+};
 
 class MemoryDeleter {
 public:

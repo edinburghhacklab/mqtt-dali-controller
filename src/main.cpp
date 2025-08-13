@@ -104,6 +104,12 @@ void setup() {
 
 	network.setup(std::bind(&API::connected, api),
 		std::bind(&API::receive, api, _1, _2, _3));
+
+	if (ota_verification_pending()) {
+		const esp_app_desc_t *desc = esp_ota_get_app_description();
+
+		network.report(TAG, std::string{"Running version: "} + null_terminated_string(desc->version) + " (verification pending)");
+	}
 }
 
 void loop() {
