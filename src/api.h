@@ -52,5 +52,6 @@ private:
 	Dimmers &dimmers_;
 	Lights &lights_;
 	UI &ui_;
+	const std::string topic_prefix_;
 	bool startup_complete_{false};
 };
