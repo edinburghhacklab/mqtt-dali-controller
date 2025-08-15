@@ -43,6 +43,7 @@ public:
 	using address_t = uint8_t;
 	using group_t = uint8_t;
 	using level_t = uint8_t;
+	using level_fast_t = uint_fast8_t;
 
 private:
 	static constexpr address_t MAX_ADDR = 63;
@@ -179,7 +180,7 @@ private:
 	const Config &config_;
 	const Lights &lights_;
 	rmt_obj_t *rmt_{nullptr};
-	std::array<level_t,num_addresses> tx_levels_{};
+	std::array<level_fast_t,num_addresses> tx_levels_{};
 	unsigned int next_address_{0};
 
 	std::mutex stats_mutex_;

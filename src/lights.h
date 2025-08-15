@@ -35,7 +35,7 @@ class Network;
 
 struct LightsState {
 	Dali::addresses_t addresses;
-	std::array<Dali::level_t,Dali::num_addresses> levels;
+	std::array<Dali::level_fast_t,Dali::num_addresses> levels;
 	Dali::addresses_t force_refresh;
 	bool broadcast_power_on_level;
 	bool broadcast_system_failure_level;
@@ -75,7 +75,7 @@ private:
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
 	static constexpr uint64_t IDLE_US = 10 * ONE_S;
 	static constexpr uint64_t DIM_REPORT_DELAY_US = 5 * ONE_S;
-	static constexpr uint8_t FORCE_REFRESH_COUNT = 2;
+	static constexpr unsigned int FORCE_REFRESH_COUNT = 2;
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
@@ -102,14 +102,14 @@ private:
 	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
 
 	mutable std::recursive_mutex lights_mutex_;
-	std::array<Dali::level_t,Dali::num_addresses> levels_{};
+	std::array<Dali::level_fast_t,Dali::num_addresses> levels_{};
 	mutable Dali::addresses_t force_refresh_;
 	mutable bool broadcast_power_on_level_{false};
 	mutable bool broadcast_system_failure_level_{false};
 	Dali::addresses_t power_on_;
 	Dali::addresses_t power_known_;
 	std::array<uint64_t,Dali::num_addresses> dim_time_us_{};
-	mutable std::array<uint8_t,Dali::num_addresses> force_refresh_count_{};
+	mutable std::array<unsigned int,Dali::num_addresses> force_refresh_count_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
 
