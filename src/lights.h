@@ -106,7 +106,7 @@ private:
 
 	Network &network_;
 	const Config &config_;
-	Dali *dali_;
+	Dali *dali_{nullptr};
 	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
 
 	mutable std::recursive_mutex lights_mutex_;

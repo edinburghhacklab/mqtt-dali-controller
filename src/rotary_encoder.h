@@ -46,7 +46,7 @@ public:
 	 */
 	static constexpr size_t DEBUG_RECORDS = 800;
 
-	RotaryEncoder(std::array<gpio_num_t,2> pins);
+	explicit RotaryEncoder(std::array<gpio_num_t,2> pins);
 	~RotaryEncoder();
 
 	void start(WakeupThread &wakeup);
@@ -59,7 +59,7 @@ private:
 
 	WakeupThread *wakeup_{nullptr};
 	const std::array<gpio_num_t,2> pins_;
-	bool state_[2];
+	std::array<bool,2> state_{};
 	int first_{-1};
 
 	std::atomic<long> change_{0};

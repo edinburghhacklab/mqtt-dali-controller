@@ -59,9 +59,9 @@ private:
 	const bool active_low_;
 
 	uint8_t first_{0};
-	int change_state_;
+	int change_state_{0};
 	uint64_t change_us_{0};
-	int state_;
+	int state_{0};
 	unsigned long change_count_{0};
 	std::atomic<unsigned long> change_count_irq_{0};
 };

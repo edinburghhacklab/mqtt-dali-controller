@@ -57,8 +57,8 @@ private:
 
 	Network &network_;
 	Lights &lights_;
-	Dali *dali_;
-	Switches *switches_;
+	Dali *dali_{nullptr};
+	Switches *switches_{nullptr};
 	std::mutex &file_mutex_;
 	uint64_t last_publish_us_{0};
 	bool startup_complete_{false};

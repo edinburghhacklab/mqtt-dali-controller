@@ -36,7 +36,7 @@
 
 class TopicParser {
 public:
-	TopicParser(const std::string &topic) {
+	explicit TopicParser(const std::string &topic) {
 		std::istringstream input{topic};
 		std::string item;
 

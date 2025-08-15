@@ -202,6 +202,7 @@ void UI::setup() {
 	pinMode(LED_GPIO, OUTPUT);
 	digitalWrite(LED_GPIO, LOW);
 
+	// cppcheck-suppress comparePointers
 	if (x509_crt_bundle_end - x509_crt_bundle_start >= 2) {
 		arduino_esp_crt_bundle_set(x509_crt_bundle_start);
 	}
