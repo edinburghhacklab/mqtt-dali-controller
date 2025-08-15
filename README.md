@@ -112,11 +112,19 @@ the dimmer and configuring the encoder/level steps:
 dali/dimmer/<0-4>/group <name> (retain)
 dali/dimmer/<0-4>/encoder_steps <steps> (retain)
 dali/dimmer/<0-4>/level_steps <0-254> (retain)
+dali/dimmer/<0-4>/mode <individual|group> (retain)
+dali/dimmer/<0-4>/sync (null)
 ```
 
 Encoder steps can be configured in the range 1 to 127 (for forward movement) or
 -1 to -127 (for backward movement). Setting the steps to 0 will disable the
 dimmer.
+
+Dimmers can operate on two modes: `individual` which allows each light to have a
+different level, or on lights as a DALI `group`. Using groups on the DALI
+interface will be faster but all lights in the group must have the same level
+so the level will be set to the average of all lights whenever dimming starts.
+Synchronise the dimmer groups using the `sync` command.
 
 ### Presets
 

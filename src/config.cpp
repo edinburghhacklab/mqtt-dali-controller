@@ -602,6 +602,20 @@ bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id
 				CFG_LOG(TAG, "Dimmer %u level steps = %" PRIu64, dimmer_id, steps);
 				data_.dimmers[dimmer_id].level_steps = steps;
 			}
+		} else if (key == "mode") {
+			std::string mode;
+			DimmerMode value;
+
+			if (!readText(reader, mode, UINT8_MAX)) {
+				return false;
+			}
+
+			if (Dimmers::mode_value(mode, value)) {
+				CFG_LOG(TAG, "Dimmer %u mode = %s", dimmer_id, Dimmers::mode_text(value));
+				data_.dimmers[dimmer_id].mode = value;
+			} else {
+				CFG_LOG(TAG, "Dimmer %u invalid mode ignored: %s", dimmer_id, mode.c_str());
+			}
 		} else {
 			CFG_LOG(TAG, "Unknown dimmer %u key: %s", dimmer_id, key.c_str());
 
@@ -861,7 +875,7 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 	writeText(writer, "dimmers");
 	writer.beginArray(NUM_DIMMERS);
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		writer.beginMap(3);
+		writer.beginMap(4);
 
 		writeText(writer, "group");
 		writeText(writer, data_.dimmers[i].group);
@@ -871,6 +885,9 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 
 		writeText(writer, "level_steps");
 		writer.writeUnsignedInt(data_.dimmers[i].level_steps);
+
+		writeText(writer, "mode");
+		writeText(writer, Dimmers::mode_text(data_.dimmers[i].mode));
 	}
 
 	writeText(writer, "presets");
@@ -924,6 +941,7 @@ void Config::publish_config() const {
 		network_.publish(dimmer_prefix + "/group", current_.dimmers[i].group, true);
 		network_.publish(dimmer_prefix + "/encoder_steps", std::to_string(current_.dimmers[i].encoder_steps), true);
 		network_.publish(dimmer_prefix + "/level_steps", std::to_string(current_.dimmers[i].level_steps), true);
+		network_.publish(dimmer_prefix + "/mode", Dimmers::mode_text(current_.dimmers[i].mode), true);
 	}
 
 	for (const auto &preset : current_.presets) {
@@ -1258,6 +1276,35 @@ void Config::set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_s
 				+ " -> " + std::to_string(level_steps));
 
 			current_.dimmers[dimmer_id].level_steps = level_steps;
+			dirty_config();
+		}
+	}
+}
+
+DimmerMode Config::get_dimmer_mode(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return current_.dimmers[dimmer_id].mode;
+	} else {
+		return DimmerMode::INDIVIDUAL;
+	}
+}
+
+void Config::set_dimmer_mode(unsigned int dimmer_id, const std::string &mode) {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		DimmerMode new_dimmer_mode;
+
+		if (Dimmers::mode_value(mode, new_dimmer_mode)
+				&& current_.dimmers[dimmer_id].mode != new_dimmer_mode) {
+			network_.report(TAG, std::string{"Dimmer "}
+				+ std::to_string(dimmer_id) + " mode: "
+				+ quoted_string(Dimmers::mode_text(current_.dimmers[dimmer_id].mode))
+				+ " -> " + quoted_string(Dimmers::mode_text(new_dimmer_mode)));
+
+			current_.dimmers[dimmer_id].mode = new_dimmer_mode;
 			dirty_config();
 		}
 	}

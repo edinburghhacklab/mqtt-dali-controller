@@ -34,11 +34,15 @@ class Config;
 class Network;
 
 struct LightsState {
-	Dali::addresses_t addresses;
-	std::array<Dali::level_fast_t,Dali::num_addresses> levels;
-	Dali::addresses_t force_refresh;
-	bool broadcast_power_on_level;
-	bool broadcast_system_failure_level;
+	Dali::addresses_t addresses; /**< Valid addresses */
+	std::array<Dali::addresses_t,Dali::num_groups> group_addresses; /**< Group members */
+	std::array<Dali::level_fast_t,Dali::num_addresses> levels; /**< Individual light levels */
+	std::array<Dali::level_fast_t,Dali::num_groups> group_levels; /**< Group light levels */
+	Dali::addresses_t group_level_addresses; /**< Individual lights where the level has been set on the group */
+	Dali::groups_t group_sync; /**< Sync group members to DALI bus */
+	Dali::addresses_t force_refresh; /**< Force refresh individual lights */
+	bool broadcast_power_on_level; /**< Broadcast store of power on level to DALI bus */
+	bool broadcast_system_failure_level;/**< Broadcast store of system failure level to DALI bus */
 };
 
 class Lights {
@@ -62,7 +66,10 @@ public:
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const Dali::addresses_t &lights, bool on);
-	void dim_adjust(const std::string &group, long level);
+	void dim_adjust(unsigned int dimmer_id, long level);
+
+	void request_group_sync(unsigned int dimmer_id);
+	void completed_group_sync(Dali::group_t group) const;
 
 	void request_broadcast_power_on_level();
 	void request_broadcast_system_failure_level();
@@ -86,6 +93,7 @@ private:
 
 	void publish_active_presets();
 	void publish_levels(bool force);
+	void clear_group_levels(const Dali::addresses_t &lights);
 	void report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us);
 	void clear_dimmed_levels(const Dali::addresses_t &lights);
 	bool is_idle();
@@ -103,6 +111,9 @@ private:
 
 	mutable std::recursive_mutex lights_mutex_;
 	std::array<Dali::level_fast_t,Dali::num_addresses> levels_{};
+	std::array<Dali::level_fast_t,Dali::num_groups> group_levels_{};
+	Dali::addresses_t group_level_addresses_{};
+	mutable Dali::groups_t group_sync_{};
 	mutable Dali::addresses_t force_refresh_;
 	mutable bool broadcast_power_on_level_{false};
 	mutable bool broadcast_system_failure_level_{false};

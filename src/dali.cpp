@@ -60,6 +60,7 @@ Dali::Dali(const Config &config, const Lights &lights)
 		: WakeupThread("dali", true), config_(config),
 		lights_(lights) {
 	tx_levels_.fill(LEVEL_NO_CHANGE);
+	tx_group_levels_.fill(LEVEL_NO_CHANGE);
 }
 
 void Dali::setup() {
@@ -109,7 +110,7 @@ unsigned long Dali::run_tasks() {
 	esp_task_wdt_reset();
 
 	uint64_t start = esp_timer_get_time();
-	LightsState lights = lights_.get_state();
+	LightsState state = lights_.get_state();
 	uint64_t count = 0;
 	/*
 	 * Set power level for lights that have changed level, cycling through the
@@ -118,20 +119,49 @@ unsigned long Dali::run_tasks() {
 	do {
 		changed = false;
 
-		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
-				unsigned address = next_address_;
+		for (unsigned int i = 0; i <= MAX_GROUP; i++) {
+			unsigned int group = next_group_;
 
-			if (lights.addresses[address]
-					&& (lights.force_refresh[address]
-						|| lights.levels[address] != tx_levels_[address])) {
-				if (lights.levels[address] > MAX_LEVEL
-						|| tx_power_level(address, lights.levels[address])) {
-					tx_levels_[address] = lights.levels[address];
+			if (state.group_levels[group] != tx_group_levels_[group]) {
+				if (state.group_levels[group] == LEVEL_NO_CHANGE) {
+					tx_group_levels_[group] = LEVEL_NO_CHANGE;
+				} else if (tx_group_power_level(group, state.group_levels[group])) {
+					tx_group_levels_[group] = state.group_levels[group];
 					changed = true;
 					refresh = false;
 					count++;
 
-					if (lights.force_refresh[address]) {
+					for (unsigned int address = 0;
+							address < state.group_addresses[group].size();
+							address++) {
+						tx_levels_[address] = state.group_levels[group];
+					}
+				}
+
+				esp_task_wdt_reset();
+			}
+
+			next_group_++;
+			next_group_ %= MAX_GROUP + 1;
+			state = lights_.get_state();
+		}
+
+		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			unsigned int address = next_address_;
+
+			if (state.addresses[address]
+					&& !state.group_level_addresses[address]
+					&& (state.force_refresh[address]
+						|| state.levels[address] != tx_levels_[address])) {
+				if (state.levels[address] == LEVEL_NO_CHANGE) {
+					tx_levels_[address] = LEVEL_NO_CHANGE;
+				} else if (tx_address_power_level(address, state.levels[address])) {
+					tx_levels_[address] = state.levels[address];
+					changed = true;
+					refresh = false;
+					count++;
+
+					if (state.force_refresh[address]) {
 						lights_.completed_force_refresh(address);
 					}
 				}
@@ -141,7 +171,7 @@ unsigned long Dali::run_tasks() {
 
 			next_address_++;
 			next_address_ %= MAX_ADDR + 1;
-			lights = lights_.get_state();
+			state = lights_.get_state();
 		}
 	} while (changed);
 
@@ -153,15 +183,36 @@ unsigned long Dali::run_tasks() {
 		stats_.max_burst_us = std::max(stats_.max_burst_us, finish - start);
 	}
 
-	if (lights.broadcast_power_on_level || lights.broadcast_system_failure_level) {
+	for (unsigned int group = 0; group < state.group_sync.size(); group++) {
+		if (!state.group_sync[group]) {
+			continue;
+		}
+
+		if (!tx_group_empty(group)) {
+			continue;
+		}
+
+		for (unsigned int address = 0;
+				address < state.group_addresses[group].size(); address++) {
+			if (state.group_addresses[group][address]) {
+				if (!tx_address_group_add(address, group)) {
+					continue;
+				}
+			}
+		}
+
+		lights_.completed_group_sync(group);
+	}
+
+	if (state.broadcast_power_on_level || state.broadcast_system_failure_level) {
 		if (tx_set_dtr_from_actual_level()) {
-			if (lights.broadcast_power_on_level) {
+			if (state.broadcast_power_on_level) {
 				if (tx_set_power_on_level_from_dtr()) {
 					lights_.completed_broadcast_power_on_level();
 				}
 			}
 
-			if (lights.broadcast_system_failure_level) {
+			if (state.broadcast_system_failure_level) {
 				if (tx_set_system_failure_level_from_dtr()) {
 					lights_.completed_broadcast_system_failure_level();
 				}
@@ -179,10 +230,11 @@ unsigned long Dali::run_tasks() {
 		for (unsigned int i = 0; i <= MAX_ADDR && !changed; i++) {
 			unsigned address = next_address_;
 
-			if (lights.addresses[address]) {
-				if (lights.levels[address] > MAX_LEVEL
-						|| tx_power_level(address, lights.levels[address])) {
-					tx_levels_[address] = lights.levels[address];
+			if (state.addresses[address]) {
+				if (state.levels[address] == LEVEL_NO_CHANGE) {
+					tx_levels_[address] = LEVEL_NO_CHANGE;
+				} else if (tx_address_power_level(address, state.levels[address])) {
+					tx_levels_[address] = state.levels[address];
 					changed = true;
 				}
 
@@ -254,12 +306,12 @@ bool Dali::tx_frame(uint8_t address, uint8_t data) {
 	return ret;
 }
 
-bool Dali::tx_power_level(address_t address, level_t level) {
+bool Dali::tx_address_power_level(address_t address, level_t level) {
 	if (address > MAX_ADDR) {
 		return true;
 	}
 
-	DALI_LOG(TAG, "Power level %u = %u", address, level);
+	DALI_LOG(TAG, "Power level A/%u = %u", address, level);
 
 	/*
 	 * Microchip Technology, AN1465
@@ -275,6 +327,73 @@ bool Dali::tx_power_level(address_t address, level_t level) {
 	 *   Power level (8 bits)
 	 */
 	return tx_frame((address << 1) | DATA_POWER_LEVEL, level);
+}
+
+bool Dali::tx_group_power_level(group_t group, level_t level) {
+	if (group > MAX_GROUP) {
+		return true;
+	}
+
+	DALI_LOG(TAG, "Power level G/%u = %u", group, level);
+
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Group address (3 bits: 100)
+	 *   Group (4 bits)
+	 *   Selector: direct arc power level (1 bit: 0)
+	 *
+	 * Data:
+	 *   Power level (8 bits)
+	 */
+	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_POWER_LEVEL, level);
+}
+
+bool Dali::tx_address_group_add(address_t address, group_t group) {
+	DALI_LOG(TAG, "Add to group %u (address %u)", group, address);
+	return tx_address_command(address, COMMAND_ADD_TO_GROUP + group);
+}
+
+bool Dali::tx_group_empty(group_t group) {
+	DALI_LOG(TAG, "Remove from group %u (group %u)", group, group);
+	return tx_group_command(group, COMMAND_REMOVE_FROM_GROUP + group);
+}
+
+bool Dali::tx_address_command(address_t address, uint8_t command) {
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Short address (1 bit: 0)
+	 *   Address (6 bits)
+	 *   Selector: command (1 bit: 1)
+	 *
+	 * Data:
+	 *   Command (8 bits)
+	 */
+	return tx_frame((address << 1) | DATA_COMMAND, command);
+}
+
+bool Dali::tx_group_command(group_t group, uint8_t command) {
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Group address (3 bits: 100)
+	 *   Group (4 bits)
+	 *   Selector: command (1 bit: 1)
+	 *
+	 * Data:
+	 *   Command (8 bits)
+	 */
+	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_COMMAND, command);
 }
 
 bool Dali::tx_broadcast_command(uint8_t command) {

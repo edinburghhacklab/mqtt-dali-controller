@@ -51,10 +51,12 @@ private:
 
 public:
 	static constexpr size_t num_addresses = MAX_ADDR + 1;
+	static constexpr size_t num_groups = MAX_GROUP + 1;
 	static constexpr level_t MAX_LEVEL = 254;
 	static constexpr level_t LEVEL_NO_CHANGE = 255;
 
 	using addresses_t = std::bitset<num_addresses>;
+	using groups_t = std::bitset<num_groups>;
 
 	Dali(const Config &config, const Lights &lights);
 
@@ -137,6 +139,7 @@ private:
 		.duration1 = HALF_SYMBOL_TICKS * IDLE_SYMBOLS * 2, .level1 = BUS_RMT_IDLE,
 	}}};
 
+	static constexpr uint8_t GROUP_ADDRESS = 0x40;
 	static constexpr uint8_t BROADCAST_ADDRESS = 0x7F;
 	static constexpr uint8_t DATA_POWER_LEVEL = 0x00;
 	static constexpr uint8_t DATA_COMMAND = 0x01;
@@ -171,8 +174,16 @@ private:
 	bool async_ready();
 	bool tx_idle();
 	bool tx_frame(uint8_t address, uint8_t data);
-	bool tx_power_level(address_t address, level_t level);
+	bool tx_address_power_level(address_t address, level_t level);
+	bool tx_group_power_level(group_t group, level_t level);
+
+	bool tx_address_group_add(address_t address, group_t group);
+	bool tx_group_empty(group_t group);
+
+	bool tx_address_command(address_t address, uint8_t command);
+	bool tx_group_command(group_t group, uint8_t command);
 	bool tx_broadcast_command(uint8_t command);
+
 	bool tx_set_dtr_from_actual_level();
 	bool tx_set_power_on_level_from_dtr();
 	bool tx_set_system_failure_level_from_dtr();
@@ -181,7 +192,9 @@ private:
 	const Lights &lights_;
 	rmt_obj_t *rmt_{nullptr};
 	std::array<level_fast_t,num_addresses> tx_levels_{};
+	std::array<level_fast_t,num_groups> tx_group_levels_{};
 	unsigned int next_address_{0};
+	unsigned int next_group_{0};
 
 	std::mutex stats_mutex_;
 	DaliStats stats_;

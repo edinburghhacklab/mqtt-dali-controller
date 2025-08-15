@@ -32,8 +32,11 @@
 
 #include "config.h"
 #include "dali.h"
+#include "dimmers.h"
 #include "network.h"
 #include "util.h"
+
+static_assert(NUM_DIMMERS <= Dali::num_groups);
 
 RTC_NOINIT_ATTR uint32_t Lights::rtc_levels_[RTC_LEVELS_SIZE];
 RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
@@ -41,6 +44,7 @@ RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
 	levels_.fill(Dali::LEVEL_NO_CHANGE);
+	group_levels_.fill(Dali::LEVEL_NO_CHANGE);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
@@ -101,10 +105,19 @@ void Lights::address_config_changed(const std::string &group) {
 
 LightsState Lights::get_state() const {
 	std::lock_guard lock{lights_mutex_};
+	std::array<Dali::addresses_t,Dali::num_groups> group_addresses;
+
+	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
+		group_addresses[i] = config_.get_group_addresses(config_.get_dimmer_group(i));
+	}
 
 	return {
 		.addresses{config_.get_addresses()},
+		.group_addresses{group_addresses},
 		.levels{levels_},
+		.group_levels{group_levels_},
+		.group_level_addresses{group_level_addresses_},
+		.group_sync{group_sync_},
 		.force_refresh{force_refresh_},
 		.broadcast_power_on_level = broadcast_power_on_level_,
 		.broadcast_system_failure_level = broadcast_system_failure_level_,
@@ -214,6 +227,8 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 		report_dimmed_levels(lights, 0);
 	}
 
+	clear_group_levels(lights);
+
 	for (int i = 0; i < levels_.size(); i++) {
 		if (addresses[i]) {
 			if (preset_levels[i] != Dali::LEVEL_NO_CHANGE) {
@@ -269,6 +284,7 @@ void Lights::set_level(const std::string &light_ids, long level) {
 	}
 
 	report_dimmed_levels(lights, 0);
+	clear_group_levels(lights);
 
 	for (int i = 0; i < levels_.size(); i++) {
 		if (!addresses[i] || !lights[i]) {
@@ -336,24 +352,71 @@ void Lights::set_power(const Dali::addresses_t &lights, bool on) {
 	}
 }
 
-void Lights::dim_adjust(const std::string &group, long level) {
+void Lights::dim_adjust(unsigned int dimmer_id, long level) {
+	if (dimmer_id >= NUM_DIMMERS) {
+		return;
+	}
+
 	if (level < -(long)MAX_LEVEL || level > (long)MAX_LEVEL) {
 		return;
 	}
 
+	const auto group = config_.get_dimmer_group(dimmer_id);
+	const auto mode = config_.get_dimmer_mode(dimmer_id);
 	const auto addresses = config_.get_addresses();
 	const auto lights = config_.get_group_addresses(group);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	uint64_t now = esp_timer_get_time();
 	bool changed;
+	long group_level;
+
+	if (mode == DimmerMode::GROUP) {
+		unsigned int count = 0;
+
+		group_level = 0;
+
+		for (unsigned int i = 0; i < levels_.size(); i++) {
+			if (!addresses[i] || !lights[i]) {
+				continue;
+			}
+
+			group_level += levels_[i];
+			count++;
+		}
+
+		if (count > 0) {
+			if (level >= 0) {
+				/* Dimming up: round down */
+				group_level = group_level / count;
+			} else {
+				/* Dimming down: round up */
+				group_level = (group_level + (count - 1)) / count;
+			}
+
+			group_level = std::max(0L, std::min((long)MAX_LEVEL, group_level + level));
+			group_levels_[dimmer_id] = group_level;
+			changed = true;
+		} else {
+			group_levels_[dimmer_id] = Dali::LEVEL_NO_CHANGE;
+		}
+	} else {
+		group_levels_[dimmer_id] = Dali::LEVEL_NO_CHANGE;
+	}
 
 	for (int i = 0; i < levels_.size(); i++) {
 		if (!addresses[i] || !lights[i]) {
 			continue;
 		}
 
-		levels_[i] = std::max(0L, std::min((long)MAX_LEVEL, (long)levels_[i] + level));
+		if (mode == DimmerMode::GROUP) {
+			levels_[i] = group_level;
+			group_level_addresses_[i] = true;
+		} else {
+			levels_[i] = std::max(0L, std::min((long)MAX_LEVEL, (long)levels_[i] + level));
+			group_level_addresses_[i] = false;
+		}
+
 		dim_time_us_[i] = now;
 		republish_presets_.insert(active_presets_[i]);
 		active_presets_[i] = RESERVED_PRESET_CUSTOM;
@@ -371,6 +434,28 @@ void Lights::dim_adjust(const std::string &group, long level) {
 		}
 
 		publish_levels(true);
+	}
+}
+
+void Lights::request_group_sync(unsigned int dimmer_id) {
+	if (dimmer_id >= NUM_DIMMERS) {
+		return;
+	}
+
+	group_sync_[dimmer_id] = true;
+
+	network_.report(TAG, "Queued group sync for dimmer " + std::to_string(dimmer_id));
+
+	if (dali_) {
+		dali_->wake_up();
+	}
+}
+
+void Lights::completed_group_sync(Dali::group_t group) const {
+	if (group < group_sync_.size()) {
+		group_sync_[group] = false;
+
+		network_.report(TAG, "Completed group sync for dimmer " + std::to_string(group));
 	}
 }
 
@@ -412,6 +497,21 @@ void Lights::completed_broadcast_system_failure_level() const {
 	broadcast_system_failure_level_ = false;
 
 	network_.report(TAG, "Completed broadcast to configure system failure level");
+}
+
+void Lights::clear_group_levels(const Dali::addresses_t &lights) {
+	/* Clear group level when setting individual light levels */
+	for (unsigned int dimmer = 0; dimmer < NUM_DIMMERS; dimmer++) {
+		if (group_levels_[dimmer] != Dali::LEVEL_NO_CHANGE) {
+			auto addresses = config_.get_group_addresses(config_.get_dimmer_group(dimmer));
+
+			if ((lights & addresses).any()) {
+				group_levels_[dimmer] = Dali::LEVEL_NO_CHANGE;
+			}
+		}
+	}
+
+	group_level_addresses_ &= ~lights;
 }
 
 void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us) {

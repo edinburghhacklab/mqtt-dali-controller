@@ -20,6 +20,7 @@
 
 #include <Arduino.h>
 #include <array>
+#include <string>
 
 #include "dali.h"
 #include "rotary_encoder.h"
@@ -34,6 +35,11 @@ class Config;
 class Lights;
 class Network;
 
+enum DimmerMode {
+	INDIVIDUAL = 0,
+	GROUP,
+};
+
 struct DimmerState {
 public:
 	DimmerState() = default;
@@ -44,6 +50,9 @@ public:
 class Dimmers: public WakeupThread {
 public:
 	Dimmers(Network &network, const Config &config, Lights &lights);
+
+	static bool mode_value(const std::string &text, DimmerMode &mode);
+	static const char* mode_text(DimmerMode mode);
 
 	void setup();
 	void publish_debug(unsigned int dimmer_id);

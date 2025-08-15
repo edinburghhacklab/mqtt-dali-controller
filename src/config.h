@@ -61,11 +61,13 @@ struct ConfigDimmerData {
 	std::string group;
 	int encoder_steps;
 	unsigned int level_steps;
+	DimmerMode mode;
 
 	bool operator==(const ConfigDimmerData &other) const {
 		return this->group == other.group
 			&& this->encoder_steps == other.encoder_steps
-			&& this->level_steps == other.level_steps;
+			&& this->level_steps == other.level_steps
+			&& this->mode == other.mode;
 	}
 
 	inline bool operator!=(const ConfigDimmerData &other) const { return !(*this == other); }
@@ -167,6 +169,9 @@ public:
 
 	unsigned int get_dimmer_level_steps(unsigned int dimmer_id) const;
 	void set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_steps);
+
+	DimmerMode get_dimmer_mode(unsigned int dimmer_id) const;
+	void set_dimmer_mode(unsigned int dimmer_id, const std::string &mode);
 
 	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<Dali::level_fast_t,Dali::num_addresses> &levels) const;

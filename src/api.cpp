@@ -94,6 +94,8 @@ void API::connected() {
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/group"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/encoder_steps"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/level_steps"));
+	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/mode"));
+	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/sync"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/get_debug"));
 	network_.subscribe(FixedConfig::mqttTopic("/preset/+"));
 	network_.subscribe(FixedConfig::mqttTopic("/preset/+/+"));
@@ -239,6 +241,10 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 				if (long_from_string(payload_str, value)) {
 					config_.set_dimmer_level_steps(dimmer_id, value);
 				}
+			} else if (topic_str == "mode") {
+				config_.set_dimmer_mode(dimmer_id, payload_str);
+			} else if (topic_str == "sync") {
+				lights_.request_group_sync(dimmer_id);
 			} else if (topic_str == "get_debug") {
 				dimmers_.publish_debug(dimmer_id);
 			}

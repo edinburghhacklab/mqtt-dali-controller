@@ -41,6 +41,30 @@ static constexpr std::array<std::array<gpio_num_t,2>,NUM_DIMMERS> DIMMER_GPIO{{
 	{(gpio_num_t)9, (gpio_num_t)10},
 }};
 
+bool Dimmers::mode_value(const std::string &text, DimmerMode &mode) {
+	if (text == "individual") {
+		mode = DimmerMode::INDIVIDUAL;
+		return true;
+	} else if (text == "group") {
+		mode = DimmerMode::GROUP;
+		return true;
+	}
+
+	return false;
+}
+
+const char* Dimmers::mode_text(DimmerMode mode) {
+	switch (mode) {
+	case DimmerMode::INDIVIDUAL:
+		return "individual";
+
+	case DimmerMode::GROUP:
+		return "group";
+	}
+
+	return "unknown";
+}
+
 Dimmers::Dimmers(Network &network, const Config &config, Lights &lights)
 		: WakeupThread("dimmers", true), network_(network), config_(config),
 		lights_(lights), encoder_({
@@ -106,11 +130,10 @@ void Dimmers::run_dimmer(unsigned int dimmer_id) {
 		change_count = -change_count;
 	}
 
-	auto group = config_.get_dimmer_group(dimmer_id);
 	long level_steps = config_.get_dimmer_level_steps(dimmer_id);
 	long level_change = std::max(-(long)MAX_LEVEL, std::min((long)MAX_LEVEL, change_count * level_steps));
 
-	lights_.dim_adjust(group, level_change);
+	lights_.dim_adjust(dimmer_id, level_change);
 }
 
 void Dimmers::publish_debug(unsigned int dimmer_id) {
