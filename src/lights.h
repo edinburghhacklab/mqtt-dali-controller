@@ -35,7 +35,7 @@ class Network;
 
 struct LightsState {
 	Dali::addresses_t addresses;
-	std::array<uint8_t,Dali::num_addresses> levels;
+	std::array<Dali::level_t,Dali::num_addresses> levels;
 	Dali::addresses_t force_refresh;
 	bool broadcast_power_on_level;
 	bool broadcast_system_failure_level;
@@ -102,7 +102,7 @@ private:
 	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
 
 	mutable std::recursive_mutex lights_mutex_;
-	std::array<uint8_t,Dali::num_addresses> levels_{};
+	std::array<Dali::level_t,Dali::num_addresses> levels_{};
 	mutable Dali::addresses_t force_refresh_;
 	mutable bool broadcast_power_on_level_{false};
 	mutable bool broadcast_system_failure_level_{false};

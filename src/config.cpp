@@ -205,7 +205,7 @@ std::string Config::addresses_text(const Dali::addresses_t &addresses) {
 }
 
 std::string Config::preset_levels_text(
-		const std::array<int16_t,Dali::num_addresses> &levels,
+		const std::array<Dali::level_t,Dali::num_addresses> &levels,
 		const Dali::addresses_t *filter) {
 	std::vector<char> buffer(2 * levels.size() + 1);
 	size_t offset = 0;
@@ -635,13 +635,13 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
-	std::array<int16_t,Dali::num_addresses> levels;
+	std::array<Dali::level_t,Dali::num_addresses> levels;
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
 	}
 
-	levels.fill(Config::LEVEL_NO_CHANGE);
+	levels.fill(Dali::LEVEL_NO_CHANGE);
 
 	while (length-- > 0) {
 		std::string key;
@@ -684,7 +684,7 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 }
 
 bool ConfigFile::read_config_preset_levels(cbor::Reader &reader,
-		std::array<int16_t,Dali::num_addresses> &levels) {
+		std::array<Dali::level_t,Dali::num_addresses> &levels) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -701,8 +701,9 @@ bool ConfigFile::read_config_preset_levels(cbor::Reader &reader,
 		}
 
 		if (i < levels.size()) {
-			if (value == Config::LEVEL_NO_CHANGE
-					|| (value >= 0 && value <= Dali::MAX_LEVEL)) {
+			if (value == Config::LEVEL_NO_CHANGE) {
+				levels[i] = Dali::LEVEL_NO_CHANGE;
+			} else if (value >= 0 && value <= Dali::MAX_LEVEL) {
 				levels[i] = value;
 			}
 			i++;
@@ -883,7 +884,11 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 		writeText(writer, "levels");
 		writer.beginArray(preset.second.size());
 		for (unsigned int i = 0; i < preset.second.size(); i++) {
-			writer.writeInt(preset.second[i]);
+			if (preset.second[i] == Dali::LEVEL_NO_CHANGE) {
+				writer.writeInt(Config::LEVEL_NO_CHANGE);
+			} else {
+				writer.writeInt(preset.second[i]);
+			}
 		}
 	}
 
@@ -930,7 +935,7 @@ void Config::publish_config() const {
 }
 
 void Config::publish_preset(const std::string &name,
-		const std::array<int16_t,Dali::num_addresses> &levels) const {
+		const std::array<Dali::level_t,Dali::num_addresses> &levels) const {
 	network_.publish(FixedConfig::mqttTopic("/preset/") + name + "/levels",
 		preset_levels_text(levels, nullptr), true);
 }
@@ -1278,7 +1283,7 @@ std::vector<std::string> Config::preset_names() const {
 	return presets;
 }
 
-bool Config::get_preset(const std::string &name, std::array<int16_t,Dali::num_addresses> &levels) const {
+bool Config::get_preset(const std::string &name, std::array<Dali::level_t,Dali::num_addresses> &levels) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (name == BUILTIN_PRESET_OFF) {
@@ -1326,9 +1331,9 @@ void Config::set_preset(const std::string &name, const std::string &light_ids, l
 			return;
 		}
 
-		std::array<int16_t,Dali::num_addresses> levels;
+		std::array<Dali::level_t,Dali::num_addresses> levels;
 
-		levels.fill(-1);
+		levels.fill(Dali::LEVEL_NO_CHANGE);
 		it = current_.presets.emplace(name, std::move(levels)).first;
 	}
 
@@ -1340,7 +1345,7 @@ void Config::set_preset(const std::string &name, const std::string &light_ids, l
 				it->second[i] = level;
 			}
 		} else {
-			it->second[i] = -1;
+			it->second[i] = Dali::LEVEL_NO_CHANGE;
 		}
 	}
 
@@ -1400,19 +1405,19 @@ void Config::set_preset(const std::string &name, std::string levels) {
 			return;
 		}
 
-		std::array<int16_t,Dali::num_addresses> empty_levels;
+		std::array<Dali::level_t,Dali::num_addresses> empty_levels;
 
-		empty_levels.fill(-1);
+		empty_levels.fill(Dali::LEVEL_NO_CHANGE);
 		it = current_.presets.emplace(name, std::move(empty_levels)).first;
 	}
 
 	auto before = preset_levels_text(it->second, &current_.lights);
 	unsigned int light_id = 0;
 
-	it->second.fill(-1);
+	it->second.fill(Dali::LEVEL_NO_CHANGE);
 
 	while (levels.length() >= 2 && light_id < it->second.size()) {
-		uint8_t level = 0;
+		Dali::level_t level = 0;
 
 		if (levels[0] >= '0' && levels[0] <= '9') {
 			level |= (levels[0] - '0') << 4;

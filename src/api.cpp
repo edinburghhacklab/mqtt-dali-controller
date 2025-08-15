@@ -145,7 +145,7 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 				} else if (light_ids == RESERVED_GROUP_LEVELS) {
 					config_.set_preset(preset_name, payload_str);
 				} else {
-					long value = -1;
+					long value = Config::LEVEL_NO_CHANGE;
 
 					if (payload_str.empty()
 							|| long_from_string(payload_str, value)) {

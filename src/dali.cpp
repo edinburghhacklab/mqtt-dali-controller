@@ -254,7 +254,7 @@ bool Dali::tx_frame(uint8_t address, uint8_t data) {
 	return ret;
 }
 
-bool Dali::tx_power_level(uint8_t address, uint8_t level) {
+bool Dali::tx_power_level(address_t address, level_t level) {
 	if (address > MAX_ADDR) {
 		return true;
 	}

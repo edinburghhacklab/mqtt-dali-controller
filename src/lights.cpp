@@ -185,7 +185,7 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 	const auto lights = config_.parse_light_ids(light_ids, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
-	std::array<int16_t,Dali::num_addresses> preset_levels;
+	std::array<Dali::level_t,Dali::num_addresses> preset_levels;
 	unsigned long long ordered_value;
 	bool changed = false;
 
@@ -216,7 +216,7 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 
 	for (int i = 0; i < levels_.size(); i++) {
 		if (addresses[i]) {
-			if (preset_levels[i] != -1) {
+			if (preset_levels[i] != Dali::LEVEL_NO_CHANGE) {
 				if (lights[i]) {
 					levels_[i] = preset_levels[i];
 					republish_presets_.insert(active_presets_[i]);
@@ -417,8 +417,8 @@ void Lights::completed_broadcast_system_failure_level() const {
 void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us) {
 	std::lock_guard lock{lights_mutex_};
 	Dali::addresses_t dimmed_lights;
-	uint8_t min_level = MAX_LEVEL;
-	uint8_t max_level = 0;
+	Dali::level_t min_level = MAX_LEVEL;
+	Dali::level_t max_level = 0;
 	uint64_t now = esp_timer_get_time();
 
 	for (unsigned int i = 0; i < lights.size(); i++) {

@@ -39,14 +39,19 @@ public:
 };
 
 class Dali: public WakeupThread {
+public:
+	using address_t = uint8_t;
+	using group_t = uint8_t;
+	using level_t = uint8_t;
+
 private:
-	static constexpr uint8_t MAX_ADDR = 63;
-	static constexpr uint8_t MAX_GROUP = 15;
+	static constexpr address_t MAX_ADDR = 63;
+	static constexpr group_t MAX_GROUP = 15;
 
 public:
 	static constexpr size_t num_addresses = MAX_ADDR + 1;
-	static constexpr uint8_t MAX_LEVEL = 254;
-	static constexpr uint8_t LEVEL_NO_CHANGE = 255;
+	static constexpr level_t MAX_LEVEL = 254;
+	static constexpr level_t LEVEL_NO_CHANGE = 255;
 
 	using addresses_t = std::bitset<num_addresses>;
 
@@ -165,7 +170,7 @@ private:
 	bool async_ready();
 	bool tx_idle();
 	bool tx_frame(uint8_t address, uint8_t data);
-	bool tx_power_level(uint8_t address, uint8_t level);
+	bool tx_power_level(address_t address, level_t level);
 	bool tx_broadcast_command(uint8_t command);
 	bool tx_set_dtr_from_actual_level();
 	bool tx_set_power_on_level_from_dtr();
@@ -174,7 +179,7 @@ private:
 	const Config &config_;
 	const Lights &lights_;
 	rmt_obj_t *rmt_{nullptr};
-	std::array<uint8_t,num_addresses> tx_levels_{};
+	std::array<level_t,num_addresses> tx_levels_{};
 	unsigned int next_address_{0};
 
 	std::mutex stats_mutex_;

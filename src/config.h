@@ -76,7 +76,7 @@ struct ConfigData {
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
 	std::unordered_map<std::string,Dali::addresses_t> groups;
-	std::unordered_map<std::string,std::array<int16_t,Dali::num_addresses>> presets;
+	std::unordered_map<std::string,std::array<Dali::level_t,Dali::num_addresses>> presets;
 	std::vector<std::string> ordered;
 
 	bool operator==(const ConfigData &other) const {
@@ -112,7 +112,7 @@ private:
 	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
-	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,Dali::num_addresses> &levels);
+	bool read_config_preset_levels(cbor::Reader &reader, std::array<Dali::level_t,Dali::num_addresses> &levels);
 	bool read_config_order(cbor::Reader &reader);
 
 	void write_config(cbor::Writer &writer) const;
@@ -131,7 +131,7 @@ public:
 	static bool valid_group_name(const std::string &name, bool use = false);
 	static bool valid_preset_name(const std::string &name, bool use = false);
 	static std::string addresses_text(const Dali::addresses_t &addresses);
-	static std::string preset_levels_text(const std::array<int16_t,Dali::num_addresses> &levels,
+	static std::string preset_levels_text(const std::array<Dali::level_t,Dali::num_addresses> &levels,
 		const Dali::addresses_t *filter);
 
 	void setup();
@@ -169,7 +169,7 @@ public:
 	void set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_steps);
 
 	std::vector<std::string> preset_names() const;
-	bool get_preset(const std::string &name, std::array<int16_t,Dali::num_addresses> &levels) const;
+	bool get_preset(const std::string &name, std::array<Dali::level_t,Dali::num_addresses> &levels) const;
 	bool get_ordered_preset(unsigned long long idx, std::string &name) const;
 	void set_preset(const std::string &name, const std::string &light_ids, long level);
 	void set_preset(const std::string &name, std::string levels);
@@ -193,7 +193,7 @@ private:
 
 	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);
-	void publish_preset(const std::string &name, const std::array<int16_t,Dali::num_addresses> &levels) const;
+	void publish_preset(const std::string &name, const std::array<Dali::level_t,Dali::num_addresses> &levels) const;
 
 	Network &network_;
 
