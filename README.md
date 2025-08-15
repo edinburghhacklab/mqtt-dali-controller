@@ -64,7 +64,7 @@ The power bits will be absent until a switch has been configured for the lights.
 
 ### Groups
 
-Up to 10 groups of lights can be configured and they can overlap. The built-in
+Up to 16 groups of lights can be configured and they can overlap. The built-in
 group `all` includes all lights.
 
 Configure which lights are present in groups by listing them as uppercase hexadecimal

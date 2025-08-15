@@ -50,6 +50,7 @@ public:
 
 private:
 	static constexpr const char *TAG = "Dimmers";
+	static constexpr auto MAX_LEVEL = Dali::MAX_LEVEL;
 	static constexpr unsigned long WATCHDOG_INTERVAL_MS = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000 / 4;
 
 	~Dimmers() = delete;

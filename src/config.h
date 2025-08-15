@@ -24,7 +24,6 @@
 #include <CBOR_streams.h>
 
 #include <array>
-#include <bitset>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -73,11 +72,11 @@ struct ConfigDimmerData {
 };
 
 struct ConfigData {
-	std::bitset<MAX_ADDR+1> lights;
+	Dali::addresses_t lights;
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
-	std::unordered_map<std::string,std::bitset<MAX_ADDR+1>> groups;
-	std::unordered_map<std::string,std::array<int16_t,MAX_ADDR+1>> presets;
+	std::unordered_map<std::string,Dali::addresses_t> groups;
+	std::unordered_map<std::string,std::array<int16_t,Dali::num_addresses>> presets;
 	std::vector<std::string> ordered;
 
 	bool operator==(const ConfigData &other) const {
@@ -104,7 +103,7 @@ private:
 
 	bool read_config(const std::string &filename, bool load);
 	bool read_config(cbor::Reader &reader);
-	bool read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights);
+	bool read_config_lights(cbor::Reader &reader, Dali::addresses_t &lights);
 	bool read_config_groups(cbor::Reader &reader);
 	bool read_config_group(cbor::Reader &reader);
 	bool read_config_switches(cbor::Reader &reader);
@@ -113,7 +112,7 @@ private:
 	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
-	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels);
+	bool read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,Dali::num_addresses> &levels);
 	bool read_config_order(cbor::Reader &reader);
 
 	void write_config(cbor::Writer &writer) const;
@@ -125,13 +124,15 @@ private:
 
 class Config {
 public:
+	static constexpr int16_t LEVEL_NO_CHANGE = -1;
+
 	explicit Config(std::mutex &file_mutex, Network &network);
 
 	static bool valid_group_name(const std::string &name, bool use = false);
 	static bool valid_preset_name(const std::string &name, bool use = false);
-	static std::string addresses_text(const std::bitset<MAX_ADDR+1> &addresses);
-	static std::string preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,
-		const std::bitset<MAX_ADDR+1> *filter);
+	static std::string addresses_text(const Dali::addresses_t &addresses);
+	static std::string preset_levels_text(const std::array<int16_t,Dali::num_addresses> &levels,
+		const Dali::addresses_t *filter);
 
 	void setup();
 	void loop();
@@ -139,12 +140,12 @@ public:
 	void save_config();
 	void publish_config() const;
 
-	std::bitset<MAX_ADDR+1> get_addresses() const;
+	Dali::addresses_t get_addresses() const;
 	void set_addresses(const std::string &addresses);
 	std::string addresses_text() const;
 
 	std::vector<std::string> group_names() const;
-	std::bitset<MAX_ADDR+1> get_group_addresses(const std::string &name) const;
+	Dali::addresses_t get_group_addresses(const std::string &name) const;
 	void set_group_addresses(const std::string &name, const std::string &addresses);
 	std::string group_addresses_text(const std::string &name) const;
 	void delete_group(const std::string &name);
@@ -168,19 +169,20 @@ public:
 	void set_dimmer_level_steps(unsigned int dimmer_id, unsigned int level_steps);
 
 	std::vector<std::string> preset_names() const;
-	bool get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const;
+	bool get_preset(const std::string &name, std::array<int16_t,Dali::num_addresses> &levels) const;
 	bool get_ordered_preset(unsigned long long idx, std::string &name) const;
 	void set_preset(const std::string &name, const std::string &light_ids, long level);
 	void set_preset(const std::string &name, std::string levels);
 	void set_ordered_presets(const std::string &names);
 	void delete_preset(const std::string &name);
 
-	std::bitset<MAX_ADDR+1> parse_light_ids(const std::string &light_ids, bool &idle_only) const;
-	std::string lights_text(const std::bitset<MAX_ADDR+1> &lights) const;
+	Dali::addresses_t parse_light_ids(const std::string &light_ids, bool &idle_only) const;
+	std::string lights_text(const Dali::addresses_t &lights) const;
 
 private:
 	static constexpr const char *TAG = "Config";
-	static constexpr size_t MAX_GROUPS = 15;
+	static constexpr auto MAX_LEVEL = Dali::MAX_LEVEL;
+	static constexpr size_t MAX_GROUPS = 16;
 	static constexpr size_t MAX_GROUP_NAME_LEN = 50;
 	static constexpr size_t MAX_PRESETS = 20;
 	static constexpr size_t MAX_PRESET_NAME_LEN = 50;
@@ -191,7 +193,7 @@ private:
 
 	void dirty_config();
 	void set_addresses(const std::string &group, std::string addresses);
-	void publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const;
+	void publish_preset(const std::string &name, const std::array<int16_t,Dali::num_addresses> &levels) const;
 
 	Network &network_;
 

@@ -19,7 +19,6 @@
 #pragma once
 
 #include <array>
-#include <bitset>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -35,9 +34,9 @@ class Config;
 class Network;
 
 struct LightsState {
-	std::bitset<MAX_ADDR+1> addresses;
-	std::array<uint8_t,MAX_ADDR+1> levels;
-	std::bitset<MAX_ADDR+1> force_refresh;
+	Dali::addresses_t addresses;
+	std::array<uint8_t,Dali::num_addresses> levels;
+	Dali::addresses_t force_refresh;
 	bool broadcast_power_on_level;
 	bool broadcast_system_failure_level;
 };
@@ -62,7 +61,7 @@ public:
 	void completed_force_refresh(unsigned int light_id) const;
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
-	void set_power(const std::bitset<MAX_ADDR+1> &lights, bool on);
+	void set_power(const Dali::addresses_t &lights, bool on);
 	void dim_adjust(const std::string &group, long level);
 
 	void request_broadcast_power_on_level();
@@ -72,6 +71,7 @@ public:
 
 private:
 	static constexpr const char *TAG = "Lights";
+	static constexpr auto MAX_LEVEL = Dali::MAX_LEVEL;
 	static constexpr size_t REPUBLISH_PER_PERIOD = 5;
 	static constexpr uint64_t IDLE_US = 10 * ONE_S;
 	static constexpr uint64_t DIM_REPORT_DELAY_US = 5 * ONE_S;
@@ -79,15 +79,15 @@ private:
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
-	static constexpr size_t RTC_LEVELS_SIZE = ((MAX_ADDR+1)+3)/4;
+	static constexpr size_t RTC_LEVELS_SIZE = (Dali::num_addresses + 3) / 4;
 	static constexpr uint32_t RTC_MAGIC = 0x0d1325ab;
 
 	static uint32_t rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels);
 
 	void publish_active_presets();
 	void publish_levels(bool force);
-	void report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us);
-	void clear_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights);
+	void report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us);
+	void clear_dimmed_levels(const Dali::addresses_t &lights);
 	bool is_idle();
 
 	void load_rtc_state();
@@ -102,20 +102,20 @@ private:
 	BootRTCStatus boot_rtc_{BootRTCStatus::UNKNOWN};
 
 	mutable std::recursive_mutex lights_mutex_;
-	std::array<uint8_t,MAX_ADDR+1> levels_{};
-	mutable std::bitset<MAX_ADDR+1> force_refresh_;
+	std::array<uint8_t,Dali::num_addresses> levels_{};
+	mutable Dali::addresses_t force_refresh_;
 	mutable bool broadcast_power_on_level_{false};
 	mutable bool broadcast_system_failure_level_{false};
-	std::bitset<MAX_ADDR+1> power_on_;
-	std::bitset<MAX_ADDR+1> power_known_;
-	std::array<uint64_t,MAX_ADDR+1> dim_time_us_{};
-	mutable std::array<uint8_t,MAX_ADDR+1> force_refresh_count_{};
+	Dali::addresses_t power_on_;
+	Dali::addresses_t power_known_;
+	std::array<uint64_t,Dali::num_addresses> dim_time_us_{};
+	mutable std::array<uint8_t,Dali::num_addresses> force_refresh_count_{};
 	uint64_t last_publish_levels_us_{0};
 	uint64_t last_activity_us_{0};
 
 	std::mutex publish_mutex_;
 	bool startup_complete_{false};
-	std::array<std::string,MAX_ADDR+1> active_presets_{};
+	std::array<std::string,Dali::num_addresses> active_presets_{};
 	std::unordered_set<std::string> republish_groups_;
 	std::unordered_set<std::string> republish_presets_;
 	uint64_t last_publish_active_us_{0};

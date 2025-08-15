@@ -33,7 +33,6 @@
 
 #include <algorithm>
 #include <array>
-#include <bitset>
 #include <mutex>
 #include <iostream>
 #include <sstream>
@@ -191,11 +190,11 @@ std::string Config::group_addresses_text(const std::string &group) const {
 	return addresses_text(get_group_addresses(group));
 }
 
-std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
-	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+std::string Config::addresses_text(const Dali::addresses_t &addresses) {
+	std::vector<char> buffer(2 * addresses.size() + 1);
 	size_t offset = 0;
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < addresses.size(); i++) {
 		if (addresses[i]) {
 			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(i & 0xFFU));
 			offset += 2;
@@ -205,12 +204,13 @@ std::string Config::addresses_text(const std::bitset<MAX_ADDR+1> &addresses) {
 	return {buffer.data(), offset};
 }
 
-std::string Config::preset_levels_text(const std::array<int16_t,MAX_ADDR+1> &levels,
-		const std::bitset<MAX_ADDR+1> *filter) {
-	std::vector<char> buffer(2 * (MAX_ADDR + 1) + 1);
+std::string Config::preset_levels_text(
+		const std::array<int16_t,Dali::num_addresses> &levels,
+		const Dali::addresses_t *filter) {
+	std::vector<char> buffer(2 * levels.size() + 1);
 	size_t offset = 0;
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < levels.size(); i++) {
 		if (filter == nullptr || filter->test(i)) {
 			snprintf(&buffer[offset], 3, "%02X", (unsigned int)(levels[i] & 0xFFU));
 			offset += 2;
@@ -346,7 +346,7 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 	return true;
 }
 
-bool ConfigFile::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1> &lights) {
+bool ConfigFile::read_config_lights(cbor::Reader &reader, Dali::addresses_t &lights) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -362,7 +362,7 @@ bool ConfigFile::read_config_lights(cbor::Reader &reader, std::bitset<MAX_ADDR+1
 			return false;
 		}
 
-		if (i <= MAX_ADDR) {
+		if (i < lights.size()) {
 			lights[i] = value;
 			i++;
 		}
@@ -392,7 +392,7 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
-	std::bitset<MAX_ADDR+1> lights;
+	Dali::addresses_t lights;
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
@@ -598,7 +598,7 @@ bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id
 				return false;
 			}
 
-			if (steps <= MAX_LEVEL) {
+			if (steps <= Dali::MAX_LEVEL) {
 				CFG_LOG(TAG, "Dimmer %u level steps = %" PRIu64, dimmer_id, steps);
 				data_.dimmers[dimmer_id].level_steps = steps;
 			}
@@ -635,13 +635,13 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
-	std::array<int16_t,MAX_ADDR+1> levels;
+	std::array<int16_t,Dali::num_addresses> levels;
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
 	}
 
-	levels.fill(-1);
+	levels.fill(Config::LEVEL_NO_CHANGE);
 
 	while (length-- > 0) {
 		std::string key;
@@ -683,7 +683,8 @@ bool ConfigFile::read_config_preset(cbor::Reader &reader) {
 	return true;
 }
 
-bool ConfigFile::read_config_preset_levels(cbor::Reader &reader, std::array<int16_t,MAX_ADDR+1> &levels) {
+bool ConfigFile::read_config_preset_levels(cbor::Reader &reader,
+		std::array<int16_t,Dali::num_addresses> &levels) {
 	uint64_t length;
 	bool indefinite;
 	unsigned int i = 0;
@@ -699,8 +700,9 @@ bool ConfigFile::read_config_preset_levels(cbor::Reader &reader, std::array<int1
 			return false;
 		}
 
-		if (i <= MAX_ADDR) {
-			if (value >= -1 && value <= MAX_LEVEL) {
+		if (i < levels.size()) {
+			if (value == Config::LEVEL_NO_CHANGE
+					|| (value >= 0 && value <= Dali::MAX_LEVEL)) {
 				levels[i] = value;
 			}
 			i++;
@@ -820,8 +822,8 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 	writer.beginMap(6);
 
 	writeText(writer, "lights");
-	writer.beginArray(MAX_ADDR+1);
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	writer.beginArray(data_.lights.size());
+	for (unsigned int i = 0; i < data_.lights.size(); i++) {
 		writer.writeBoolean(data_.lights[i]);
 	}
 
@@ -834,8 +836,8 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 		writeText(writer, group.first);
 
 		writeText(writer, "lights");
-		writer.beginArray(MAX_ADDR+1);
-		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		writer.beginArray(group.second.size());
+		for (unsigned int i = 0; i < group.second.size(); i++) {
 			writer.writeBoolean(group.second[i]);
 		}
 	}
@@ -879,8 +881,8 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 		writeText(writer, preset.first);
 
 		writeText(writer, "levels");
-		writer.beginArray(MAX_ADDR+1);
-		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		writer.beginArray(preset.second.size());
+		for (unsigned int i = 0; i < preset.second.size(); i++) {
 			writer.writeInt(preset.second[i]);
 		}
 	}
@@ -927,12 +929,13 @@ void Config::publish_config() const {
 		vector_text(current_.ordered), true);
 }
 
-void Config::publish_preset(const std::string &name, const std::array<int16_t,MAX_ADDR+1> &levels) const {
+void Config::publish_preset(const std::string &name,
+		const std::array<int16_t,Dali::num_addresses> &levels) const {
 	network_.publish(FixedConfig::mqttTopic("/preset/") + name + "/levels",
 		preset_levels_text(levels, nullptr), true);
 }
 
-std::bitset<MAX_ADDR+1> Config::get_addresses() const {
+Dali::addresses_t Config::get_addresses() const {
 	std::lock_guard lock{data_mutex_};
 
 	return get_group_addresses(BUILTIN_GROUP_ALL);
@@ -957,7 +960,7 @@ std::vector<std::string> Config::group_names() const {
 	return groups;
 }
 
-std::bitset<MAX_ADDR+1> Config::get_group_addresses(const std::string &group) const {
+Dali::addresses_t Config::get_group_addresses(const std::string &group) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (group == BUILTIN_GROUP_ALL) {
@@ -991,7 +994,7 @@ void Config::set_group_addresses(const std::string &name, const std::string &add
 
 void Config::set_addresses(const std::string &group, std::string addresses) {
 	std::lock_guard lock{data_mutex_};
-	std::bitset<MAX_ADDR+1> lights;
+	Dali::addresses_t lights;
 
 	auto before = group_addresses_text(group);
 
@@ -1014,7 +1017,7 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 			break;
 		}
 
-		if (address <= MAX_ADDR) {
+		if (address < lights.size()) {
 			lights[address] = true;
 		}
 
@@ -1275,7 +1278,7 @@ std::vector<std::string> Config::preset_names() const {
 	return presets;
 }
 
-bool Config::get_preset(const std::string &name, std::array<int16_t,MAX_ADDR+1> &levels) const {
+bool Config::get_preset(const std::string &name, std::array<int16_t,Dali::num_addresses> &levels) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (name == BUILTIN_PRESET_OFF) {
@@ -1305,7 +1308,7 @@ bool Config::get_ordered_preset(unsigned long long idx, std::string &name) const
 }
 
 void Config::set_preset(const std::string &name, const std::string &light_ids, long level) {
-	if (level < -1 || level > MAX_LEVEL) {
+	if (!(level == LEVEL_NO_CHANGE || (level >= 0 && level <= MAX_LEVEL))) {
 		return;
 	}
 
@@ -1323,7 +1326,7 @@ void Config::set_preset(const std::string &name, const std::string &light_ids, l
 			return;
 		}
 
-		std::array<int16_t,MAX_ADDR+1> levels;
+		std::array<int16_t,Dali::num_addresses> levels;
 
 		levels.fill(-1);
 		it = current_.presets.emplace(name, std::move(levels)).first;
@@ -1331,7 +1334,7 @@ void Config::set_preset(const std::string &name, const std::string &light_ids, l
 
 	auto before = preset_levels_text(it->second, &current_.lights);
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < current_.lights.size(); i++) {
 		if (current_.lights[i]) {
 			if (lights[i]) {
 				it->second[i] = level;
@@ -1397,7 +1400,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 			return;
 		}
 
-		std::array<int16_t,MAX_ADDR+1> empty_levels;
+		std::array<int16_t,Dali::num_addresses> empty_levels;
 
 		empty_levels.fill(-1);
 		it = current_.presets.emplace(name, std::move(empty_levels)).first;
@@ -1408,7 +1411,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 	it->second.fill(-1);
 
-	while (levels.length() >= 2 && light_id <= MAX_ADDR) {
+	while (levels.length() >= 2 && light_id < it->second.size()) {
 		uint8_t level = 0;
 
 		if (levels[0] >= '0' && levels[0] <= '9') {
@@ -1429,7 +1432,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 		levels = levels.substr(2);
 
-		it->second[light_id++] = (level == LEVEL_NO_CHANGE ? -1 : level);
+		it->second[light_id++] = (level == Dali::LEVEL_NO_CHANGE ? LEVEL_NO_CHANGE : level);
 	}
 
 	auto after = preset_levels_text(it->second, &current_.lights);
@@ -1464,12 +1467,12 @@ void Config::delete_preset(const std::string &name) {
 	dirty_config();
 }
 
-std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
+Dali::addresses_t Config::parse_light_ids(const std::string &light_ids,
 		bool &idle_only) const {
 	std::lock_guard lock{data_mutex_};
 	std::istringstream input{light_ids};
 	std::string item;
-	std::bitset<MAX_ADDR+1> lights;
+	Dali::addresses_t lights;
 
 	idle_only = false;
 
@@ -1480,12 +1483,12 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 
 		if (item == BUILTIN_GROUP_ALL) {
 			begin = 0;
-			end = MAX_ADDR;
+			end = Dali::num_addresses - 1;
 		} else if (item == BUILTIN_GROUP_IDLE) {
 			idle_only = true;
 			continue;
 		} else if (group != current_.groups.end()) {
-			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			for (unsigned int i = 0; i < group->second.size(); i++) {
 				if (group->second[i]) {
 					lights[i] = true;
 				}
@@ -1516,11 +1519,11 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 			continue;
 		}
 
-		if (begin > MAX_ADDR) {
+		if (begin >= Dali::num_addresses) {
 			continue;
 		}
 
-		if (end > MAX_ADDR) {
+		if (end >= Dali::num_addresses) {
 			continue;
 		}
 
@@ -1532,7 +1535,7 @@ std::bitset<MAX_ADDR+1> Config::parse_light_ids(const std::string &light_ids,
 	return lights;
 }
 
-std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &lights) const {
+std::string Config::lights_text(const Dali::addresses_t &lights) const {
 	std::lock_guard lock{data_mutex_};
 	std::vector<std::string> light_texts;
 	std::string list = "";
@@ -1541,7 +1544,7 @@ std::string Config::lights_text(const std::bitset<MAX_ADDR+1> &lights) const {
 	unsigned int begin = INT_MAX;
 	unsigned int previous = INT_MAX;
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < current_.lights.size(); i++) {
 		if (current_.lights[i]) {
 			total++;
 		} else {

@@ -21,13 +21,10 @@
 #include <Arduino.h>
 
 #include <array>
+#include <bitset>
 #include <mutex>
 
 #include "thread.h"
-
-static constexpr uint8_t MAX_ADDR = 63;
-static constexpr uint8_t MAX_LEVEL = 254;
-static constexpr uint8_t LEVEL_NO_CHANGE = 255;
 
 class Config;
 class Lights;
@@ -42,7 +39,17 @@ public:
 };
 
 class Dali: public WakeupThread {
+private:
+	static constexpr uint8_t MAX_ADDR = 63;
+	static constexpr uint8_t MAX_GROUP = 15;
+
 public:
+	static constexpr size_t num_addresses = MAX_ADDR + 1;
+	static constexpr uint8_t MAX_LEVEL = 254;
+	static constexpr uint8_t LEVEL_NO_CHANGE = 255;
+
+	using addresses_t = std::bitset<num_addresses>;
+
 	Dali(const Config &config, const Lights &lights);
 
 	void setup();
@@ -167,7 +174,7 @@ private:
 	const Config &config_;
 	const Lights &lights_;
 	rmt_obj_t *rmt_{nullptr};
-	std::array<uint8_t,MAX_ADDR+1> tx_levels_{};
+	std::array<uint8_t,num_addresses> tx_levels_{};
 	unsigned int next_address_{0};
 
 	std::mutex stats_mutex_;

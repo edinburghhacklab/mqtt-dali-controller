@@ -24,7 +24,6 @@
 
 #include <algorithm>
 #include <array>
-#include <bitset>
 #include <mutex>
 #include <string>
 #include <unordered_set>
@@ -41,7 +40,7 @@ RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
 
 Lights::Lights(Network &network, const Config &config)
 		: network_(network), config_(config) {
-	levels_.fill(LEVEL_NO_CHANGE);
+	levels_.fill(Dali::LEVEL_NO_CHANGE);
 	active_presets_.fill(RESERVED_PRESET_UNKNOWN);
 	republish_presets_.insert(BUILTIN_PRESET_OFF);
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
@@ -57,7 +56,7 @@ void Lights::set_dali(Dali &dali) {
 
 void Lights::loop() {
 	if (startup_complete_ && network_.connected()) {
-		std::bitset<MAX_ADDR+1> lights;
+		Dali::addresses_t lights;
 
 		lights.set();
 
@@ -113,7 +112,7 @@ LightsState Lights::get_state() const {
 }
 
 void Lights::completed_force_refresh(unsigned int light_id) const {
-	if (light_id > MAX_ADDR) {
+	if (light_id >= force_refresh_count_.size()) {
 		return;
 	}
 
@@ -154,7 +153,7 @@ void Lights::load_rtc_state() {
 	if (rtc_crc_ == expected_crc) {
 		ESP_LOGE(TAG, "Restoring light levels from RTC memory");
 
-		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+		for (unsigned int i = 0; i < levels_.size(); i++) {
 			levels_[i] = (levels[i/4] >> (8 * (i % 4))) & 0xFFU;
 		}
 
@@ -169,7 +168,7 @@ void Lights::load_rtc_state() {
 void Lights::save_rtc_state() {
 	std::array<uint32_t,RTC_LEVELS_SIZE> levels{};
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < levels_.size(); i++) {
 		levels[i/4] |= levels_[i] << (8 * (i % 4));
 	}
 
@@ -186,7 +185,7 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 	const auto lights = config_.parse_light_ids(light_ids, idle_only);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
-	std::array<int16_t,MAX_ADDR+1> preset_levels;
+	std::array<int16_t,Dali::num_addresses> preset_levels;
 	unsigned long long ordered_value;
 	bool changed = false;
 
@@ -215,7 +214,7 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 		report_dimmed_levels(lights, 0);
 	}
 
-	for (int i = 0; i <= MAX_ADDR; i++) {
+	for (int i = 0; i < levels_.size(); i++) {
 		if (addresses[i]) {
 			if (preset_levels[i] != -1) {
 				if (lights[i]) {
@@ -271,7 +270,7 @@ void Lights::set_level(const std::string &light_ids, long level) {
 
 	report_dimmed_levels(lights, 0);
 
-	for (int i = 0; i <= MAX_ADDR; i++) {
+	for (int i = 0; i < levels_.size(); i++) {
 		if (!addresses[i] || !lights[i]) {
 			continue;
 		}
@@ -297,7 +296,7 @@ void Lights::set_level(const std::string &light_ids, long level) {
 	}
 }
 
-void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
+void Lights::set_power(const Dali::addresses_t &lights, bool on) {
 	std::lock_guard lock{lights_mutex_};
 
 	power_known_ |= lights;
@@ -310,7 +309,7 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 			 * power level in case the lights no longer remember it.
 			 */
 
-			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			for (unsigned int i = 0; i < lights.size(); i++) {
 				if (lights[i] && !power_on_[i]) {
 					force_refresh_count_[i] = FORCE_REFRESH_COUNT;
 					force_refresh_[i] = true;
@@ -325,7 +324,7 @@ void Lights::set_power(const std::bitset<MAX_ADDR+1> &lights, bool on) {
 		power_on_ |= lights;
 	} else {
 		if ((power_on_ & lights).any()) {
-			for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+			for (unsigned int i = 0; i < lights.size(); i++) {
 				if (lights[i]) {
 					force_refresh_count_[i] = 0;
 					force_refresh_[i] = false;
@@ -349,7 +348,7 @@ void Lights::dim_adjust(const std::string &group, long level) {
 	uint64_t now = esp_timer_get_time();
 	bool changed;
 
-	for (int i = 0; i <= MAX_ADDR; i++) {
+	for (int i = 0; i < levels_.size(); i++) {
 		if (!addresses[i] || !lights[i]) {
 			continue;
 		}
@@ -415,14 +414,14 @@ void Lights::completed_broadcast_system_failure_level() const {
 	network_.report(TAG, "Completed broadcast to configure system failure level");
 }
 
-void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_t time_us) {
+void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us) {
 	std::lock_guard lock{lights_mutex_};
-	std::bitset<MAX_ADDR+1> dimmed_lights;
+	Dali::addresses_t dimmed_lights;
 	uint8_t min_level = MAX_LEVEL;
 	uint8_t max_level = 0;
 	uint64_t now = esp_timer_get_time();
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < lights.size(); i++) {
 		if (lights[i] && dim_time_us_[i] && now - dim_time_us_[i] >= time_us) {
 			dimmed_lights[i] = true;
 			min_level = std::min(min_level, levels_[i]);
@@ -442,8 +441,8 @@ void Lights::report_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights, uint64_
 	}
 }
 
-void Lights::clear_dimmed_levels(const std::bitset<MAX_ADDR+1> &lights) {
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+void Lights::clear_dimmed_levels(const Dali::addresses_t &lights) {
+	for (unsigned int i = 0; i < lights.size(); i++) {
 		if (lights[i]) {
 			dim_time_us_[i] = 0;
 		}
@@ -474,7 +473,7 @@ void Lights::publish_active_presets() {
 						&& i < publish_index_ + REPUBLISH_PER_PERIOD)) {
 				bool is_active = false;
 
-				for (unsigned int j = 0; j <= MAX_ADDR; j++) {
+				for (unsigned int j = 0; j < lights.size(); j++) {
 					if (lights[j] && active_presets_[j] == preset) {
 						is_active = true;
 						break;
@@ -512,10 +511,10 @@ void Lights::publish_levels(bool force) {
 
 	std::lock_guard lock{lights_mutex_};
 	const auto addresses = config_.get_addresses();
-	std::vector<char> buffer(3 * (MAX_ADDR + 1) + 1);
+	std::vector<char> buffer(3 * levels_.size() + 1);
 	size_t offset = 0;
 
-	for (unsigned int i = 0; i <= MAX_ADDR; i++) {
+	for (unsigned int i = 0; i < levels_.size(); i++) {
 		unsigned int value = (levels_[i] & 0xFFU);
 
 		if (addresses[i]) {
