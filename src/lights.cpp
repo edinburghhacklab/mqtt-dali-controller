@@ -635,6 +635,10 @@ void Lights::publish_levels(bool force) {
 			value |= power_on_[i] ? LEVEL_POWER_ON : LEVEL_POWER_OFF;
 		}
 
+		if (group_level_addresses_[i]) {
+			value |= LEVEL_GROUPED;
+		}
+
 		snprintf(&buffer[offset], 4, "%03X", value);
 		offset += 3;
 	}

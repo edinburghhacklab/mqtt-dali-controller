@@ -59,6 +59,7 @@ The lower 4 bits indicate the power status of the light:
 * `1` = Present (in configured list of addresses)
 * `2` = Power on
 * `4` = Power off
+* `8` = Dimmed as a member of a DALI group
 
 The power bits will be absent until a switch has been configured for the lights.
 

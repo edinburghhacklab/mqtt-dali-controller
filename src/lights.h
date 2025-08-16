@@ -86,6 +86,7 @@ private:
 	static constexpr unsigned int LEVEL_PRESENT = (1U << 8);
 	static constexpr unsigned int LEVEL_POWER_ON = (1U << 9);
 	static constexpr unsigned int LEVEL_POWER_OFF = (1U << 10);
+	static constexpr unsigned int LEVEL_GROUPED = (1U << 11);
 	static constexpr size_t RTC_LEVELS_SIZE = (Dali::num_addresses + 3) / 4;
 	static constexpr uint32_t RTC_MAGIC = 0x0d1325ab;
 
