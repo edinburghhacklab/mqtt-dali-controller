@@ -443,6 +443,8 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 }
 
 void Lights::request_group_sync(unsigned int dimmer_id) {
+	std::lock_guard lock{lights_mutex_};
+
 	if (dimmer_id >= NUM_DIMMERS) {
 		return;
 	}
@@ -457,6 +459,8 @@ void Lights::request_group_sync(unsigned int dimmer_id) {
 }
 
 void Lights::completed_group_sync(Dali::group_t group) const {
+	std::lock_guard lock{lights_mutex_};
+
 	if (group < group_sync_.size()) {
 		group_sync_[group] = false;
 
