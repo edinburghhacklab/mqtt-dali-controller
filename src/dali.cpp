@@ -196,12 +196,13 @@ unsigned long Dali::run_tasks() {
 				address < state.group_addresses[group].size(); address++) {
 			if (state.group_addresses[group][address]) {
 				if (!tx_address_group_add(address, group)) {
-					continue;
+					goto group_sync_failed;
 				}
 			}
 		}
 
 		lights_.completed_group_sync(group);
+group_sync_failed:;
 	}
 
 	if (state.broadcast_power_on_level || state.broadcast_system_failure_level) {
