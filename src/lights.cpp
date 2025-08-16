@@ -91,10 +91,15 @@ BootRTCStatus Lights::rtc_boot_status() const {
 }
 
 void Lights::address_config_changed() {
-	std::lock_guard lock{publish_mutex_};
+	std::lock_guard publish_lock{publish_mutex_};
 	auto groups = config_.group_names();
 
 	republish_groups_.insert(groups.begin(), groups.end());
+
+	std::lock_guard lights_lock{lights_mutex_};
+	auto addresses = config_.get_addresses();
+
+	group_level_addresses_ &= addresses;
 }
 
 void Lights::address_config_changed(const std::string &group) {
