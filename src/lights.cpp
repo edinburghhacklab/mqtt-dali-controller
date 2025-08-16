@@ -500,6 +500,8 @@ void Lights::completed_broadcast_system_failure_level() const {
 }
 
 void Lights::clear_group_levels(const Dali::addresses_t &lights) {
+	Dali::addresses_t clear_lights{lights};
+
 	/* Clear group level when setting individual light levels */
 	for (unsigned int dimmer = 0; dimmer < NUM_DIMMERS; dimmer++) {
 		if (group_levels_[dimmer] != Dali::LEVEL_NO_CHANGE) {
@@ -507,11 +509,14 @@ void Lights::clear_group_levels(const Dali::addresses_t &lights) {
 
 			if ((lights & addresses).any()) {
 				group_levels_[dimmer] = Dali::LEVEL_NO_CHANGE;
+
+				/* All lights in the group now get updated individually */
+				clear_lights |= addresses;
 			}
 		}
 	}
 
-	group_level_addresses_ &= ~lights;
+	group_level_addresses_ &= ~clear_lights;
 }
 
 void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us) {
