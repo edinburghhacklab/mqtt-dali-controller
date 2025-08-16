@@ -959,8 +959,6 @@ void Config::publish_preset(const std::string &name,
 }
 
 Dali::addresses_t Config::get_addresses() const {
-	std::lock_guard lock{data_mutex_};
-
 	return get_group_addresses(BUILTIN_GROUP_ALL);
 }
 
