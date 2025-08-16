@@ -272,7 +272,7 @@ bool Dali::tx_idle() {
 	return rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
 }
 
-bool Dali::tx_frame(uint8_t address, uint8_t data) {
+bool Dali::tx_frame(uint8_t address, uint8_t data, bool repeat) {
 	uint64_t start = esp_timer_get_time();
 
 	/*
@@ -288,16 +288,26 @@ bool Dali::tx_frame(uint8_t address, uint8_t data) {
 	 * 1 - Stop bits (2 bits: idle)
 	 *     Time between consecutive forward frames (11 bits: idle)
 	 */
-	std::array<rmt_data_t,1 + 8 + 8 + 1> symbols;
+	std::array<rmt_data_t,2 * (1 + 8 + 8 + 1)> symbols;
 	size_t i = 0;
 
 	symbols[i++] = DALI_1;
 	i += byte_to_symbols(&symbols[i], address);
 	i += byte_to_symbols(&symbols[i], data);
 	symbols[i++] = DALI_STOP_IDLE;
-	assert(i == symbols.size());
 
-	bool ret = rmtWriteBlocking(rmt_, symbols.data(), symbols.size());
+	if (repeat) {
+		symbols[i++] = DALI_1;
+		i += byte_to_symbols(&symbols[i], address);
+		i += byte_to_symbols(&symbols[i], data);
+		symbols[i++] = DALI_STOP_IDLE;
+
+		assert(i == symbols.size());
+	} else {
+		assert(i == symbols.size() / 2);
+	}
+
+	bool ret = rmtWriteBlocking(rmt_, symbols.data(), i);
 	uint64_t finish = esp_timer_get_time();
 	std::lock_guard lock{stats_mutex_};
 
@@ -327,7 +337,7 @@ bool Dali::tx_address_power_level(address_t address, level_t level) {
 	 * Data:
 	 *   Power level (8 bits)
 	 */
-	return tx_frame((address << 1) | DATA_POWER_LEVEL, level);
+	return tx_frame((address << 1) | DATA_POWER_LEVEL, level, false);
 }
 
 bool Dali::tx_group_power_level(group_t group, level_t level) {
@@ -350,20 +360,20 @@ bool Dali::tx_group_power_level(group_t group, level_t level) {
 	 * Data:
 	 *   Power level (8 bits)
 	 */
-	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_POWER_LEVEL, level);
+	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_POWER_LEVEL, level, false);
 }
 
 bool Dali::tx_address_group_add(address_t address, group_t group) {
 	DALI_LOG(TAG, "Add to group %u (address %u)", group, address);
-	return tx_address_command(address, COMMAND_ADD_TO_GROUP + group);
+	return tx_address_command(address, COMMAND_ADD_TO_GROUP + group, true);
 }
 
 bool Dali::tx_group_empty(group_t group) {
 	DALI_LOG(TAG, "Remove from group %u (group %u)", group, group);
-	return tx_group_command(group, COMMAND_REMOVE_FROM_GROUP + group);
+	return tx_group_command(group, COMMAND_REMOVE_FROM_GROUP + group, true);
 }
 
-bool Dali::tx_address_command(address_t address, uint8_t command) {
+bool Dali::tx_address_command(address_t address, uint8_t command, bool repeat) {
 	/*
 	 * Microchip Technology, AN1465
 	 * Digitally Addressable Lighting Interface (DALI) Communication
@@ -377,10 +387,10 @@ bool Dali::tx_address_command(address_t address, uint8_t command) {
 	 * Data:
 	 *   Command (8 bits)
 	 */
-	return tx_frame((address << 1) | DATA_COMMAND, command);
+	return tx_frame((address << 1) | DATA_COMMAND, command, repeat);
 }
 
-bool Dali::tx_group_command(group_t group, uint8_t command) {
+bool Dali::tx_group_command(group_t group, uint8_t command, bool repeat) {
 	/*
 	 * Microchip Technology, AN1465
 	 * Digitally Addressable Lighting Interface (DALI) Communication
@@ -394,10 +404,10 @@ bool Dali::tx_group_command(group_t group, uint8_t command) {
 	 * Data:
 	 *   Command (8 bits)
 	 */
-	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_COMMAND, command);
+	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_COMMAND, command, repeat);
 }
 
-bool Dali::tx_broadcast_command(uint8_t command) {
+bool Dali::tx_broadcast_command(uint8_t command, bool repeat) {
 	/*
 	 * Microchip Technology, AN1465
 	 * Digitally Addressable Lighting Interface (DALI) Communication
@@ -410,20 +420,20 @@ bool Dali::tx_broadcast_command(uint8_t command) {
 	 * Data:
 	 *   Command (8 bits)
 	 */
-	return tx_frame((BROADCAST_ADDRESS << 1) | DATA_COMMAND, command);
+	return tx_frame((BROADCAST_ADDRESS << 1) | DATA_COMMAND, command, repeat);
 }
 
 bool Dali::tx_set_dtr_from_actual_level() {
 	DALI_LOG(TAG, "Copy actual level to DTR (broadcast)");
-	return tx_broadcast_command(COMMAND_STORE_ACTUAL_LEVEL_IN_DTR);
+	return tx_broadcast_command(COMMAND_STORE_ACTUAL_LEVEL_IN_DTR, true);
 }
 
 bool Dali::tx_set_power_on_level_from_dtr() {
 	DALI_LOG(TAG, "Copy DTR to power on level (broadcast)");
-	return tx_broadcast_command(COMMAND_SET_POWER_ON_LEVEL_FROM_DTR);
+	return tx_broadcast_command(COMMAND_SET_POWER_ON_LEVEL_FROM_DTR, true);
 }
 
 bool Dali::tx_set_system_failure_level_from_dtr() {
 	DALI_LOG(TAG, "Copy DTR to system failure level (broadcast)");
-	return tx_broadcast_command(COMMAND_SET_SYSTEM_FAILURE_LEVEL_FROM_DTR);
+	return tx_broadcast_command(COMMAND_SET_SYSTEM_FAILURE_LEVEL_FROM_DTR, true);
 }

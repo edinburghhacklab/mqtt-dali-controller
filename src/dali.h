@@ -158,6 +158,12 @@ private:
 	static constexpr uint8_t COMMAND_STEP_DOWN = 0x04;
 	static constexpr uint8_t COMMAND_STEP_DOWN_AND_OFF = 0x07;
 	static constexpr uint8_t COMMAND_ON_AND_STEP_UP = 0x08;
+
+	/*
+	 * IEC62386-102:2014 Edition 2.0, Section 11 Definition of Commands, Table 15
+	 *
+	 * "Send Twice" applies to commands 0x20..0x81
+	 */
 	static constexpr uint8_t COMMAND_RESET = 0x20;
 	static constexpr uint8_t COMMAND_STORE_ACTUAL_LEVEL_IN_DTR = 0x21;
 	static constexpr uint8_t COMMAND_SET_SYSTEM_FAILURE_LEVEL_FROM_DTR = 0x2C;
@@ -173,16 +179,16 @@ private:
 
 	bool async_ready();
 	bool tx_idle();
-	bool tx_frame(uint8_t address, uint8_t data);
+	bool tx_frame(uint8_t address, uint8_t data, bool repeat);
 	bool tx_address_power_level(address_t address, level_t level);
 	bool tx_group_power_level(group_t group, level_t level);
 
 	bool tx_address_group_add(address_t address, group_t group);
 	bool tx_group_empty(group_t group);
 
-	bool tx_address_command(address_t address, uint8_t command);
-	bool tx_group_command(group_t group, uint8_t command);
-	bool tx_broadcast_command(uint8_t command);
+	bool tx_address_command(address_t address, uint8_t command, bool repeat);
+	bool tx_group_command(group_t group, uint8_t command, bool repeat);
+	bool tx_broadcast_command(uint8_t command, bool repeat);
 
 	bool tx_set_dtr_from_actual_level();
 	bool tx_set_power_on_level_from_dtr();
