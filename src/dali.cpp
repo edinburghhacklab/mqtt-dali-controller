@@ -138,12 +138,12 @@ unsigned long Dali::run_tasks() {
 					}
 				}
 
+				state = lights_.get_state();
 				esp_task_wdt_reset();
 			}
 
 			next_group_++;
 			next_group_ %= MAX_GROUP + 1;
-			state = lights_.get_state();
 		}
 
 		for (unsigned int i = 0; i <= MAX_ADDR; i++) {
@@ -166,12 +166,12 @@ unsigned long Dali::run_tasks() {
 					}
 				}
 
+				state = lights_.get_state();
 				esp_task_wdt_reset();
 			}
 
 			next_address_++;
 			next_address_ %= MAX_ADDR + 1;
-			state = lights_.get_state();
 		}
 	} while (changed);
 
