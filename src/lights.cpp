@@ -110,15 +110,10 @@ void Lights::address_config_changed(const std::string &group) {
 
 LightsState Lights::get_state() const {
 	std::lock_guard lock{lights_mutex_};
-	std::array<Dali::addresses_t,Dali::num_groups> group_addresses;
-
-	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		group_addresses[i] = config_.get_group_addresses(config_.get_dimmer_group(i));
-	}
 
 	return {
 		.addresses{config_.get_addresses()},
-		.group_addresses{group_addresses},
+		.group_addresses{config_.get_dimmer_group_addresses()},
 		.levels{levels_},
 		.group_levels{group_levels_},
 		.group_level_addresses{group_level_addresses_},

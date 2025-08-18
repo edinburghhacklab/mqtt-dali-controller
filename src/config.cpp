@@ -997,6 +997,17 @@ Dali::addresses_t Config::get_group_addresses(const std::string &group) const {
 	}
 }
 
+std::array<Dali::addresses_t,Dali::num_groups> Config::get_dimmer_group_addresses() const {
+	std::array<Dali::addresses_t,Dali::num_groups> group_addresses;
+	std::lock_guard lock{data_mutex_};
+
+	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
+		group_addresses[i] = get_group_addresses(current_.dimmers[i].group);
+	}
+
+	return group_addresses;
+}
+
 void Config::set_addresses(const std::string &addresses) {
 	std::lock_guard lock{data_mutex_};
 

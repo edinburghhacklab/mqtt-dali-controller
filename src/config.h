@@ -162,6 +162,7 @@ public:
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
 	std::string get_dimmer_group(unsigned int dimmer_id) const;
+	std::array<Dali::addresses_t,Dali::num_groups> get_dimmer_group_addresses() const;
 	void set_dimmer_group(unsigned int dimmer_id, const std::string &name);
 
 	int get_dimmer_encoder_steps(unsigned int dimmer_id) const;
