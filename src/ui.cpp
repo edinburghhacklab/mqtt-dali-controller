@@ -163,8 +163,8 @@ void UI::publish_stats() {
 		network_.publish(dali_topic + "/tx_count", std::to_string(dali_stats.tx_count));
 
 		if (dali_stats.tx_count > 0) {
-			network_.publish(dali_topic + "/min_tx_us", std::to_string(dali_stats.min_tx_us));
-			network_.publish(dali_topic + "/max_tx_us", std::to_string(dali_stats.max_tx_us));
+			network_.publish(dali_topic + "/min_tx_us_bytes", std::to_string(dali_stats.min_tx_us));
+			network_.publish(dali_topic + "/max_tx_us_bytes", std::to_string(dali_stats.max_tx_us));
 		}
 
 		if (dali_stats.max_burst_tx_count > 0) {
@@ -173,24 +173,24 @@ void UI::publish_stats() {
 		}
 	}
 
-	network_.publish(topic + "/heap/size", std::to_string(ESP.getHeapSize()));
-	network_.publish(topic + "/heap/free", std::to_string(ESP.getFreeHeap()));
-	network_.publish(topic + "/heap/min_free_size", std::to_string(ESP.getMinFreeHeap()));
-	network_.publish(topic + "/heap/max_block_size", std::to_string(ESP.getMaxAllocHeap()));
+	network_.publish(topic + "/heap/size_bytes", std::to_string(ESP.getHeapSize()));
+	network_.publish(topic + "/heap/free_bytes", std::to_string(ESP.getFreeHeap()));
+	network_.publish(topic + "/heap/min_free_size_bytes", std::to_string(ESP.getMinFreeHeap()));
+	network_.publish(topic + "/heap/max_block_size_bytes", std::to_string(ESP.getMaxAllocHeap()));
 
-	network_.publish(topic + "/psram/size", std::to_string(ESP.getPsramSize()));
-	network_.publish(topic + "/psram/free", std::to_string(ESP.getFreePsram()));
-	network_.publish(topic + "/psram/min_free_size", std::to_string(ESP.getMinFreePsram()));
-	network_.publish(topic + "/psram/max_block_size", std::to_string(ESP.getMaxAllocPsram()));
+	network_.publish(topic + "/psram/size_bytes", std::to_string(ESP.getPsramSize()));
+	network_.publish(topic + "/psram/free_bytes", std::to_string(ESP.getFreePsram()));
+	network_.publish(topic + "/psram/min_free_size_bytes", std::to_string(ESP.getMinFreePsram()));
+	network_.publish(topic + "/psram/max_block_size_bytes", std::to_string(ESP.getMaxAllocPsram()));
 
 	{
 		std::lock_guard lock{file_mutex_};
 
-		network_.publish(topic + "/flash/filesystem/size", std::to_string(FS.totalBytes()));
-		network_.publish(topic + "/flash/filesystem/used", std::to_string(FS.usedBytes()));
+		network_.publish(topic + "/flash/filesystem/size_bytes", std::to_string(FS.totalBytes()));
+		network_.publish(topic + "/flash/filesystem/used_bytes", std::to_string(FS.usedBytes()));
 	}
 
-	network_.publish(topic + "/stack/min_size", std::to_string(uxTaskGetStackHighWaterMark(nullptr)));
+	network_.publish(topic + "/stack/min_size_bytes", std::to_string(uxTaskGetStackHighWaterMark(nullptr)));
 	network_.publish(topic + "/max_queue_size", std::to_string(network_.maximum_queue_size()));
 	network_.publish(topic + "/temperature_c", std::to_string(temperatureRead()));
 	network_.publish(topic + "/uptime_us", std::to_string(esp_timer_get_time()));
