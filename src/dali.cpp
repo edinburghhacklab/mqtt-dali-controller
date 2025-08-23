@@ -310,10 +310,12 @@ bool Dali::tx_frame(uint8_t address, uint8_t data, bool repeat) {
 	bool ret = rmtWriteBlocking(rmt_, symbols.data(), i);
 	uint64_t finish = esp_timer_get_time();
 	std::lock_guard lock{stats_mutex_};
+	size_t tx_count = repeat ? 2 : 1;
+	uint64_t duration_us = (finish - start) / tx_count;
 
-	stats_.min_tx_us = std::min(stats_.min_tx_us, finish - start);
-	stats_.max_tx_us = std::max(stats_.max_tx_us, finish - start);
-	stats_.tx_count += repeat ? 2 : 1;
+	stats_.min_tx_us = std::min(stats_.min_tx_us, duration_us);
+	stats_.max_tx_us = std::max(stats_.max_tx_us, duration_us);
+	stats_.tx_count += tx_count;
 	return ret;
 }
 
