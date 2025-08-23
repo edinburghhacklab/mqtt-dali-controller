@@ -313,7 +313,7 @@ bool Dali::tx_frame(uint8_t address, uint8_t data, bool repeat) {
 
 	stats_.min_tx_us = std::min(stats_.min_tx_us, finish - start);
 	stats_.max_tx_us = std::max(stats_.max_tx_us, finish - start);
-	stats_.tx_count++;
+	stats_.tx_count += repeat ? 2 : 1;
 	return ret;
 }
 
