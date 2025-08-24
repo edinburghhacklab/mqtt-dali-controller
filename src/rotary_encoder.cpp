@@ -86,7 +86,7 @@ IRAM_ATTR void RotaryEncoder::interrupt_handler(int pin_id) {
 	debug_[debug_pos_] = {
 		.pin = (uint32_t)pin_id,
 		.state = state,
-		.time_us = (uint32_t)rtc_cntl_ll_get_rtc_time(),
+		.time_us = (uint32_t)esp_timer_get_time(),
 	};
 	debug_pos_ = (debug_pos_ + 1) % debug_.size();
 
