@@ -163,8 +163,8 @@ void UI::publish_stats() {
 		network_.publish(dali_topic + "/tx_count", std::to_string(dali_stats.tx_count));
 
 		if (dali_stats.tx_count > 0) {
-			network_.publish(dali_topic + "/min_tx_us_bytes", std::to_string(dali_stats.min_tx_us));
-			network_.publish(dali_topic + "/max_tx_us_bytes", std::to_string(dali_stats.max_tx_us));
+			network_.publish(dali_topic + "/min_tx_us", std::to_string(dali_stats.min_tx_us));
+			network_.publish(dali_topic + "/max_tx_us", std::to_string(dali_stats.max_tx_us));
 		}
 
 		if (dali_stats.max_burst_tx_count > 0) {
