@@ -1458,6 +1458,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 	std::lock_guard lock{data_mutex_};
 	auto it = current_.presets.find(name);
+	std::string before;
 
 	if (it == current_.presets.cend()) {
 		if (current_.presets.size() == MAX_PRESETS) {
@@ -1468,9 +1469,10 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 		empty_levels.fill(Dali::LEVEL_NO_CHANGE);
 		it = current_.presets.emplace(name, std::move(empty_levels)).first;
+	} else {
+		before = preset_levels_text(it->second, &current_.lights);
 	}
 
-	auto before = preset_levels_text(it->second, &current_.lights);
 	unsigned int light_id = 0;
 
 	it->second.fill(Dali::LEVEL_NO_CHANGE);
