@@ -126,7 +126,7 @@ private:
 
 class Config {
 public:
-	static constexpr int16_t LEVEL_NO_CHANGE = -1;
+	static constexpr int64_t LEVEL_NO_CHANGE = -1;
 
 	explicit Config(std::mutex &file_mutex, Network &network);
 

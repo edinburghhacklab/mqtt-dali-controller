@@ -1370,7 +1370,9 @@ bool Config::get_ordered_preset(unsigned long long idx, std::string &name) const
 }
 
 void Config::set_preset(const std::string &name, const std::string &light_ids, long level) {
-	if (!(level == LEVEL_NO_CHANGE || (level >= 0 && level <= MAX_LEVEL))) {
+	if (level == Config::LEVEL_NO_CHANGE) {
+		level = Dali::LEVEL_NO_CHANGE;
+	} else if (!(level >= 0 && level <= MAX_LEVEL)) {
 		return;
 	}
 
@@ -1494,7 +1496,7 @@ void Config::set_preset(const std::string &name, std::string levels) {
 
 		levels = levels.substr(2);
 
-		it->second[light_id++] = (level == Dali::LEVEL_NO_CHANGE ? LEVEL_NO_CHANGE : level);
+		it->second[light_id++] = level;
 	}
 
 	auto after = preset_levels_text(it->second, &current_.lights);
