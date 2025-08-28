@@ -145,7 +145,9 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 				if (light_ids == RESERVED_GROUP_DELETE) {
 					config_.delete_preset(preset_name);
 				} else if (light_ids == RESERVED_GROUP_LEVELS) {
-					config_.set_preset(preset_name, payload_str);
+					if (!payload_str.empty()) {
+						config_.set_preset(preset_name, payload_str);
+					}
 				} else {
 					long value = Config::LEVEL_NO_CHANGE;
 
