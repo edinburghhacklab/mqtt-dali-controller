@@ -134,7 +134,9 @@ unsigned long Dali::run_tasks() {
 					for (unsigned int address = 0;
 							address < state.group_addresses[group].size();
 							address++) {
-						tx_levels_[address] = state.group_levels[group];
+						if (state.group_addresses[group][address]) {
+							tx_levels_[address] = state.group_levels[group];
+						}
 					}
 				}
 
