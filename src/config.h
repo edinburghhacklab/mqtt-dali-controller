@@ -37,6 +37,7 @@ static const std::string BUILTIN_GROUP_ALL = "all";
 static const std::string BUILTIN_PRESET_OFF = "off";
 static const std::string RESERVED_GROUP_DELETE = "delete";
 static const std::string RESERVED_GROUP_LEVELS = "levels";
+static const std::string RESERVED_GROUP_SYNC = "sync";
 static const std::string RESERVED_PRESET_ORDER = "order";
 
 namespace cbor = qindesign::cbor;
@@ -58,13 +59,13 @@ struct ConfigSwitchData {
 };
 
 struct ConfigDimmerData {
-	std::string group;
+	std::vector<std::string> groups;
 	int encoder_steps;
 	unsigned int level_steps;
 	DimmerMode mode;
 
 	bool operator==(const ConfigDimmerData &other) const {
-		return this->group == other.group
+		return this->groups == other.groups
 			&& this->encoder_steps == other.encoder_steps
 			&& this->level_steps == other.level_steps
 			&& this->mode == other.mode;
@@ -73,19 +74,35 @@ struct ConfigDimmerData {
 	inline bool operator!=(const ConfigDimmerData &other) const { return !(*this == other); }
 };
 
+struct ConfigGroupData {
+	Dali::group_fast_t id;
+	Dali::addresses_t addresses;
+
+	bool operator==(const ConfigGroupData &other) const {
+		return this->id == other.id
+			&& this->addresses == other.addresses;
+	}
+
+	inline bool operator!=(const ConfigGroupData &other) const { return !(*this == other); }
+};
+
 struct ConfigData {
 	Dali::addresses_t lights;
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
-	std::unordered_map<std::string,Dali::addresses_t> groups;
+	std::unordered_map<std::string,ConfigGroupData> groups_by_name;
+	std::array<Dali::addresses_t,Dali::num_groups> groups_by_id;
 	std::unordered_map<std::string,std::array<Dali::level_fast_t,Dali::num_addresses>> presets;
 	std::vector<std::string> ordered;
+
+	void assign_group_ids();
 
 	bool operator==(const ConfigData &other) const {
 		return this->lights == other.lights
 			&& this->dimmers == other.dimmers
 			&& this->switches == other.switches
-			&& this->groups == other.groups
+			&& this->groups_by_name == other.groups_by_name
+			&& this->groups_by_id == other.groups_by_id
 			&& this->presets == other.presets
 			&& this->ordered == other.ordered;
 	}
@@ -112,6 +129,7 @@ private:
 	bool read_config_switch(cbor::Reader &reader, unsigned int switch_id);
 	bool read_config_dimmers(cbor::Reader &reader);
 	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
+	bool read_config_dimmer_groups(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
 	bool read_config_preset_levels(cbor::Reader &reader, std::array<Dali::level_fast_t,Dali::num_addresses> &levels);
@@ -124,9 +142,19 @@ private:
 	ConfigData data_;
 };
 
+struct DimmerConfig {
+	DimmerMode mode;
+	Dali::addresses_t addresses;
+	Dali::groups_t groups;
+	std::array<Dali::group_t,Dali::num_addresses> address_group;
+	std::array<Dali::addresses_t,Dali::num_groups> group_addresses;
+	bool all;
+};
+
 class Config {
 public:
 	static constexpr int64_t LEVEL_NO_CHANGE = -1;
+	static constexpr size_t MAX_GROUPS = 16;
 
 	explicit Config(std::mutex &file_mutex, Network &network);
 
@@ -147,8 +175,11 @@ public:
 	std::string addresses_text() const;
 
 	std::vector<std::string> group_names() const;
+	Dali::group_t get_group_id(const std::string &name) const;
 	Dali::addresses_t get_group_addresses(const std::string &name) const;
-	void set_group_addresses(const std::string &name, const std::string &addresses);
+	Dali::addresses_t get_group_addresses(Dali::group_t group) const;
+	std::array<Dali::addresses_t,Dali::num_groups> get_group_addresses() const;
+	bool set_group_addresses(const std::string &name, const std::string &addresses);
 	std::string group_addresses_text(const std::string &name) const;
 	void delete_group(const std::string &name);
 
@@ -161,9 +192,10 @@ public:
 	std::string get_switch_preset(unsigned int switch_id) const;
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
-	std::string get_dimmer_group(unsigned int dimmer_id) const;
-	std::array<Dali::addresses_t,Dali::num_groups> get_dimmer_group_addresses() const;
-	void set_dimmer_group(unsigned int dimmer_id, const std::string &name);
+	DimmerConfig get_dimmer(unsigned int dimmer_id) const;
+
+	std::vector<std::string> get_dimmer_groups(unsigned int dimmer_id) const;
+	void set_dimmer_groups(unsigned int dimmer_id, const std::string &groups);
 
 	int get_dimmer_encoder_steps(unsigned int dimmer_id) const;
 	void set_dimmer_encoder_steps(unsigned int dimmer_id, int encoder_steps);
@@ -188,8 +220,7 @@ public:
 private:
 	static constexpr const char *TAG = "Config";
 	static constexpr auto MAX_LEVEL = Dali::MAX_LEVEL;
-	static constexpr size_t MAX_GROUPS = 16;
-	static constexpr size_t MAX_GROUP_NAME_LEN = 50;
+	static constexpr size_t MAX_GROUP_NAME_LEN = 20;
 	static constexpr size_t MAX_PRESETS = 20;
 	static constexpr size_t MAX_PRESET_NAME_LEN = 50;
 	static constexpr size_t MAX_SWITCH_NAME_LEN = 50;
@@ -198,7 +229,8 @@ private:
 	Config& operator=(const Config&) = delete;
 
 	void dirty_config();
-	void set_addresses(const std::string &group, std::string addresses);
+	bool set_addresses(const std::string &group, std::string addresses);
+	void publish_group_ids() const;
 	void publish_preset(const std::string &name, const std::array<Dali::level_fast_t,Dali::num_addresses> &levels) const;
 
 	Network &network_;

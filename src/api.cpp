@@ -88,14 +88,14 @@ void API::connected() {
 	network_.subscribe(FixedConfig::mqttTopic("/ota/+"));
 	network_.subscribe(FixedConfig::mqttTopic("/addresses"));
 	network_.subscribe(FixedConfig::mqttTopic("/group/+"));
+	network_.subscribe(FixedConfig::mqttTopic("/groups/sync"));
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/group"));
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/name"));
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/preset"));
-	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/group"));
+	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/groups"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/encoder_steps"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/level_steps"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/mode"));
-	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/sync"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/get_debug"));
 	network_.subscribe(FixedConfig::mqttTopic("/preset/+"));
 	network_.subscribe(FixedConfig::mqttTopic("/preset/+/+"));
@@ -229,8 +229,8 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 
 		if (topic_parser.get_long(dimmer_id)
 				&& topic_parser.get_string(topic_str)) {
-			if (topic_str == "group") {
-				config_.set_dimmer_group(dimmer_id, payload_str);
+			if (topic_str == "groups") {
+				config_.set_dimmer_groups(dimmer_id, payload_str);
 			} else if (topic_str == "encoder_steps") {
 				long value;
 
@@ -245,8 +245,6 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 				}
 			} else if (topic_str == "mode") {
 				config_.set_dimmer_mode(dimmer_id, payload_str);
-			} else if (topic_str == "sync") {
-				lights_.request_group_sync(dimmer_id);
 			} else if (topic_str == "get_debug") {
 				dimmers_.publish_debug(dimmer_id);
 			}
@@ -255,11 +253,17 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 		std::string group_name;
 
 		if (topic_parser.get_string(group_name)) {
-			if (!payload_str.empty()) {
-				config_.set_group_addresses(group_name, payload_str);
-				lights_.address_config_changed(group_name);
-			} else {
+			if (group_name == RESERVED_GROUP_SYNC) {
+				lights_.request_group_sync();
+			} else if (payload_str.empty()) {
 				config_.delete_group(group_name);
+			} else if (payload_str == "sync") {
+				lights_.request_group_sync(group_name);
+			} else {
+				if (config_.set_group_addresses(group_name, payload_str)) {
+					lights_.address_config_changed(group_name);
+					lights_.request_group_sync(group_name);
+				}
 			}
 		}
 	} else if (topic_str == "command") {

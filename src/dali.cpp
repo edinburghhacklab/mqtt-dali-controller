@@ -119,6 +119,22 @@ unsigned long Dali::run_tasks() {
 	do {
 		changed = false;
 
+		if (state.broadcast_level != tx_broadcast_level_) {
+			if (state.broadcast_level == LEVEL_NO_CHANGE) {
+				tx_broadcast_level_ = LEVEL_NO_CHANGE;
+			} else if (tx_broadcast_power_level(state.broadcast_level)) {
+				tx_broadcast_level_= state.broadcast_level;
+				changed = true;
+				refresh = false;
+				count++;
+
+				tx_levels_.fill(state.broadcast_level);
+			}
+
+			state = lights_.get_state();
+			esp_task_wdt_reset();
+		}
+
 		for (unsigned int i = 0; i <= MAX_GROUP; i++) {
 			unsigned int group = next_group_;
 
@@ -365,6 +381,24 @@ bool Dali::tx_group_power_level(group_t group, level_t level) {
 	 *   Power level (8 bits)
 	 */
 	return tx_frame((GROUP_ADDRESS << 1) | (group << 1) | DATA_POWER_LEVEL, level, false);
+}
+
+bool Dali::tx_broadcast_power_level(level_t level) {
+	DALI_LOG(TAG, "Power level B = %u", level);
+
+	/*
+	 * Microchip Technology, AN1465
+	 * Digitally Addressable Lighting Interface (DALI) Communication
+	 * Page 5
+	 *
+	 * Address:
+	 *   Broadcast address (7 bits: 1s)
+	 *   Selector: direct arc power level (1 bit: 0)
+	 *
+	 * Data:
+	 *   Power level (8 bits)
+	 */
+	return tx_frame((BROADCAST_ADDRESS << 1) | DATA_POWER_LEVEL, level, false);
 }
 
 bool Dali::tx_address_group_add(address_t address, group_t group) {

@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <mutex>
 #include <iostream>
 #include <sstream>
@@ -129,6 +130,7 @@ bool Config::valid_group_name(const std::string &name, bool use) {
 			|| name == BUILTIN_GROUP_IDLE
 			|| name == RESERVED_GROUP_DELETE
 			|| name == RESERVED_GROUP_LEVELS
+			|| name == RESERVED_GROUP_SYNC
 			|| name.empty()
 			|| name.length() > MAX_GROUP_NAME_LEN) {
 		return false;
@@ -222,6 +224,41 @@ std::string Config::preset_levels_text(
 	}
 
 	return {buffer.data(), offset};
+}
+
+void ConfigData::assign_group_ids() {
+	std::bitset<Dali::num_groups> group_ids;
+
+	groups_by_id.fill({});
+
+	for (auto &group : groups_by_name) {
+		if (group.second.id == Dali::GROUP_NONE) {
+			continue;
+		}
+
+		if (group.second.id >= group_ids.size() || group_ids[group.second.id]) {
+			group.second.id = Dali::GROUP_NONE;
+			continue;
+		}
+
+		group_ids[group.second.id] = true;
+		groups_by_id[group.second.id] = group.second.addresses;
+	}
+
+	for (auto &group : groups_by_name) {
+		if (group.second.id != Dali::GROUP_NONE) {
+			continue;
+		}
+
+		for (Dali::group_t i = 0; i < Dali::num_groups; i++) {
+			if (!group_ids[i]) {
+				group.second.id = i;
+				group_ids[i] = true;
+				groups_by_id[i] = group.second.addresses;
+				break;
+			}
+		}
+	}
 }
 
 void Config::load_config() {
@@ -385,6 +422,8 @@ bool ConfigFile::read_config_groups(cbor::Reader &reader) {
 		}
 	}
 
+	data_.assign_group_ids();
+
 	return true;
 }
 
@@ -392,7 +431,9 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
 	std::string name;
-	Dali::addresses_t lights;
+	ConfigGroupData group;
+
+	group.id = Dali::GROUP_NONE;
 
 	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
 		return false;
@@ -409,8 +450,18 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 			if (!readText(reader, name, UINT8_MAX)) {
 				return false;
 			}
+		} else if (key == "id") {
+			uint64_t value;
+
+			if (!cbor::expectUnsignedInt(reader, &value)) {
+				return false;
+			}
+
+			if (value < Dali::num_groups) {
+				group.id = value;
+			}
 		} else if (key == "lights") {
-			if (!read_config_lights(reader, lights)) {
+			if (!read_config_lights(reader, group.addresses)) {
 				return false;
 			}
 		} else {
@@ -423,13 +474,18 @@ bool ConfigFile::read_config_group(cbor::Reader &reader) {
 	}
 
 	if (Config::valid_group_name(name)) {
-		auto result = data_.groups.emplace(name, std::move(lights));
+		if (data_.groups_by_name.size() < Config::MAX_GROUPS) {
+			auto result = data_.groups_by_name.emplace(name, std::move(group));
 
-		if (result.second) {
-			CFG_LOG(TAG, "Group %s = %s", name.c_str(),
-				Config::addresses_text(result.first->second).c_str());
+			if (result.second) {
+				CFG_LOG(TAG, "Group %s (%u) = %s", name.c_str(),
+					result.first->second.id,
+					Config::addresses_text(result.first->second.addresses).c_str());
+			} else {
+				CFG_LOG(TAG, "Ignoring duplicate group: %s", name.c_str());
+			}
 		} else {
-			CFG_LOG(TAG, "Ignoring duplicate group: %s", name.c_str());
+			CFG_LOG(TAG, "Too many groups, ignoring: %s", name.c_str());
 		}
 	} else {
 		CFG_LOG(TAG, "Ignoring invalid group: %s", name.c_str());
@@ -576,9 +632,14 @@ bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id
 
 			if (group.empty() || Config::valid_group_name(group, true)) {
 				CFG_LOG(TAG, "Dimmer %u group = %s", dimmer_id, group.c_str());
-				data_.dimmers[dimmer_id].group = std::move(group);
+				data_.dimmers[dimmer_id].groups.clear();
+				data_.dimmers[dimmer_id].groups.push_back(std::move(group));
 			} else {
 				CFG_LOG(TAG, "Dimmer %u invalid group ignored: %s", dimmer_id, group.c_str());
+			}
+		} else if (key == "groups") {
+			if (!read_config_dimmer_groups(reader, dimmer_id)) {
+				return false;
 			}
 		} else if (key == "encoder_steps") {
 			int64_t steps;
@@ -622,6 +683,32 @@ bool ConfigFile::read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id
 			if (!reader.isWellFormed()) {
 				return false;
 			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_dimmer_groups(cbor::Reader &reader, unsigned int dimmer_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string group;
+
+		if (!readText(reader, group, UINT8_MAX)) {
+			return false;
+		}
+
+		if (group.empty() || Config::valid_group_name(group, true)) {
+			CFG_LOG(TAG, "Dimmer %u group += %s", dimmer_id, group.c_str());
+			data_.dimmers[dimmer_id].groups.push_back(std::move(group));
+		} else {
+			CFG_LOG(TAG, "Dimmer %u invalid group ignored: %s", dimmer_id, group.c_str());
 		}
 	}
 
@@ -843,17 +930,20 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 	}
 
 	writeText(writer, "groups");
-	writer.beginArray(data_.groups.size());
-	for (const auto &group : data_.groups) {
-		writer.beginMap(2);
+	writer.beginArray(data_.groups_by_name.size());
+	for (const auto &group : data_.groups_by_name) {
+		writer.beginMap(3);
 
 		writeText(writer, "name");
 		writeText(writer, group.first);
 
+		writeText(writer, "id");
+		writer.writeUnsignedInt(group.second.id);
+
 		writeText(writer, "lights");
-		writer.beginArray(group.second.size());
-		for (unsigned int i = 0; i < group.second.size(); i++) {
-			writer.writeBoolean(group.second[i]);
+		writer.beginArray(group.second.addresses.size());
+		for (unsigned int i = 0; i < group.second.addresses.size(); i++) {
+			writer.writeBoolean(group.second.addresses[i]);
 		}
 	}
 
@@ -877,8 +967,11 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
 		writer.beginMap(4);
 
-		writeText(writer, "group");
-		writeText(writer, data_.dimmers[i].group);
+		writeText(writer, "groups");
+		writer.beginArray(data_.dimmers[i].groups.size());
+		for (const auto &group : data_.dimmers[i].groups) {
+			writeText(writer, group);
+		}
 
 		writeText(writer, "encoder_steps");
 		writer.writeInt(data_.dimmers[i].encoder_steps);
@@ -922,10 +1015,12 @@ void Config::publish_config() const {
 	network_.publish(FixedConfig::mqttTopic("/addresses"),
 		addresses_text(current_.lights), true);
 
-	for (const auto &group : current_.groups) {
+	for (const auto &group : current_.groups_by_name) {
 		network_.publish(FixedConfig::mqttTopic("/group/") + group.first,
-			addresses_text(group.second), true);
+			addresses_text(group.second.addresses), true);
 	}
+
+	publish_group_ids();
 
 	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
 		auto switch_prefix = FixedConfig::mqttTopic("/switch/") + std::to_string(i);
@@ -938,10 +1033,14 @@ void Config::publish_config() const {
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
 		auto dimmer_prefix = FixedConfig::mqttTopic("/dimmer/") + std::to_string(i);
 
-		network_.publish(dimmer_prefix + "/group", current_.dimmers[i].group, true);
-		network_.publish(dimmer_prefix + "/encoder_steps", std::to_string(current_.dimmers[i].encoder_steps), true);
-		network_.publish(dimmer_prefix + "/level_steps", std::to_string(current_.dimmers[i].level_steps), true);
-		network_.publish(dimmer_prefix + "/mode", Dimmers::mode_text(current_.dimmers[i].mode), true);
+		network_.publish(dimmer_prefix + "/groups",
+			vector_text(current_.dimmers[i].groups), true);
+		network_.publish(dimmer_prefix + "/encoder_steps",
+			std::to_string(current_.dimmers[i].encoder_steps), true);
+		network_.publish(dimmer_prefix + "/level_steps",
+			std::to_string(current_.dimmers[i].level_steps), true);
+		network_.publish(dimmer_prefix + "/mode",
+			Dimmers::mode_text(current_.dimmers[i].mode), true);
 	}
 
 	for (const auto &preset : current_.presets) {
@@ -950,6 +1049,30 @@ void Config::publish_config() const {
 
 	network_.publish(FixedConfig::mqttTopic("/preset/order"),
 		vector_text(current_.ordered), true);
+}
+
+void Config::publish_group_ids() const {
+	std::array<std::string,Dali::num_groups> groups;
+
+	for (const auto &group : current_.groups_by_name) {
+		if (group.second.id < groups.size()) {
+			groups[group.second.id] = group.first;
+		}
+	}
+
+	std::string text;
+	bool first = true;
+
+	for (const auto &group : groups) {
+		if (!first) {
+			text += ',';
+		}
+
+		text += group;
+		first = false;
+	}
+
+	network_.publish(FixedConfig::mqttTopic("/groups/ids"), text, true);
 }
 
 void Config::publish_preset(const std::string &name,
@@ -970,7 +1093,7 @@ std::vector<std::string> Config::group_names() const {
 
 	std::unique_lock lock{data_mutex_};
 
-	for (const auto &group : current_.groups) {
+	for (const auto &group : current_.groups_by_name) {
 		groups.emplace_back(group.first);
 	}
 
@@ -981,31 +1104,47 @@ std::vector<std::string> Config::group_names() const {
 	return groups;
 }
 
+Dali::group_t Config::get_group_id(const std::string &group) const {
+	std::lock_guard lock{data_mutex_};
+	auto it = current_.groups_by_name.find(group);
+
+	if (it == current_.groups_by_name.end()) {
+		return Dali::GROUP_NONE;
+	}
+
+	return it->second.id;
+}
+
 Dali::addresses_t Config::get_group_addresses(const std::string &group) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (group == BUILTIN_GROUP_ALL) {
 		return current_.lights;
 	} else {
-		auto it = current_.groups.find(group);
+		auto it = current_.groups_by_name.find(group);
 
-		if (it == current_.groups.end()) {
+		if (it == current_.groups_by_name.end()) {
 			return {};
 		}
 
-		return it->second;
+		return it->second.addresses;
 	}
 }
 
-std::array<Dali::addresses_t,Dali::num_groups> Config::get_dimmer_group_addresses() const {
-	std::array<Dali::addresses_t,Dali::num_groups> group_addresses;
+Dali::addresses_t Config::get_group_addresses(Dali::group_t group) const {
 	std::lock_guard lock{data_mutex_};
 
-	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		group_addresses[i] = get_group_addresses(current_.dimmers[i].group);
+	if (group < current_.groups_by_id.size()) {
+		return current_.groups_by_id[group];
+	} else {
+		return {};
 	}
+}
 
-	return group_addresses;
+std::array<Dali::addresses_t,Dali::num_groups> Config::get_group_addresses() const {
+	std::lock_guard lock{data_mutex_};
+
+	return current_.groups_by_id;
 }
 
 void Config::set_addresses(const std::string &addresses) {
@@ -1014,17 +1153,17 @@ void Config::set_addresses(const std::string &addresses) {
 	set_addresses(BUILTIN_GROUP_ALL, addresses);
 }
 
-void Config::set_group_addresses(const std::string &name, const std::string &addresses) {
+bool Config::set_group_addresses(const std::string &name, const std::string &addresses) {
 	std::lock_guard lock{data_mutex_};
 
 	if (!valid_group_name(name)) {
-		return;
+		return false;
 	}
 
-	set_addresses(name, addresses);
+	return set_addresses(name, addresses);
 }
 
-void Config::set_addresses(const std::string &group, std::string addresses) {
+bool Config::set_addresses(const std::string &group, std::string addresses) {
 	std::lock_guard lock{data_mutex_};
 	Dali::addresses_t lights;
 
@@ -1059,22 +1198,31 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 	if (group == BUILTIN_GROUP_ALL) {
 		current_.lights = lights;
 	} else {
-		auto it = current_.groups.find(group);
+		auto it = current_.groups_by_name.find(group);
 
-		if (it == current_.groups.end()) {
-			if (current_.groups.size() == MAX_GROUPS) {
-				return;
+		if (it == current_.groups_by_name.end()) {
+			ConfigGroupData data{Dali::GROUP_NONE, lights};
+
+			if (current_.groups_by_name.size() >= MAX_GROUPS) {
+				return false;
 			}
 
-			current_.groups.emplace(group, lights);
+			current_.groups_by_name.emplace(group, std::move(data));
+			current_.assign_group_ids();
+			publish_group_ids();
 		} else {
-			it->second = lights;
+			it->second.addresses = lights;
+
+			if (it->second.id < current_.groups_by_id.size()) {
+				current_.groups_by_id[it->second.id] = lights;
+			}
 		}
 	}
 
 	auto after = addresses_text(lights);
+	bool changed = before != after;
 
-	if (before != after) {
+	if (changed) {
 		if (group == BUILTIN_GROUP_ALL) {
 			CFG_LOG(TAG, "Configure light addresses: %s", addresses.c_str());
 			network_.publish(FixedConfig::mqttTopic("/addresses"), after, true);
@@ -1083,19 +1231,22 @@ void Config::set_addresses(const std::string &group, std::string addresses) {
 		} else {
 			CFG_LOG(TAG, "Configure group %s addresses: %s", group.c_str(), addresses.c_str());
 			network_.publish(FixedConfig::mqttTopic("/group/") + group, after, true);
-			network_.report(TAG, std::string{"Group "} + group + " addresses: "
-				+ quoted_string(before) + " -> " + quoted_string(after));
+			network_.report(TAG, std::string{"Group "} + quoted_string(group)
+				+ " addresses: " + quoted_string(before) + " -> "
+				+ quoted_string(after));
 		}
 	}
 
 	dirty_config();
+
+	return changed;
 }
 
 void Config::delete_group(const std::string &name) {
 	std::lock_guard lock{data_mutex_};
-	const auto it = current_.groups.find(name);
+	const auto it = current_.groups_by_name.find(name);
 
-	if (it == current_.groups.cend()) {
+	if (it == current_.groups_by_name.cend()) {
 		return;
 	}
 
@@ -1103,8 +1254,12 @@ void Config::delete_group(const std::string &name) {
 	network_.report(TAG, std::string{"Group "} + name + ": "
 		+ quoted_string(group_addresses_text(name)) + " (deleted)");
 
-	current_.groups.erase(it);
+	if (it->second.id < current_.groups_by_id.size()) {
+		current_.groups_by_id[it->second.id].reset();
+	}
+	current_.groups_by_name.erase(it);
 	network_.publish(FixedConfig::mqttTopic("/group/") + name, "", true);
+	publish_group_ids();
 	for (const auto &preset : preset_names()) {
 		network_.publish(FixedConfig::mqttTopic("/active/") + name + "/" + preset, "", true);
 	}
@@ -1200,34 +1355,112 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 	}
 }
 
-std::string Config::get_dimmer_group(unsigned int dimmer_id) const {
+DimmerConfig Config::get_dimmer(unsigned int dimmer_id) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (dimmer_id < NUM_DIMMERS) {
-		return current_.dimmers[dimmer_id].group;
+		DimmerConfig dimmer_config{
+			.mode = current_.dimmers[dimmer_id].mode,
+			.addresses{},
+			.groups{},
+			.address_group{},
+			.group_addresses{},
+			.all = false,
+		};
+
+		dimmer_config.address_group.fill(Dali::GROUP_NONE);
+
+		for (const auto &group : current_.dimmers[dimmer_id].groups) {
+			if (group == BUILTIN_GROUP_ALL) {
+				dimmer_config.all = true;
+				dimmer_config.addresses = current_.lights;
+
+				if (dimmer_config.groups.any()) {
+					goto invalid;
+				}
+			} else if (dimmer_config.all) {
+				goto invalid;
+			} else {
+				auto it = current_.groups_by_name.find(group);
+
+				if (it == current_.groups_by_name.end()) {
+					continue;
+				}
+
+				if (it->second.id >= dimmer_config.groups.size()) {
+					continue;
+				}
+
+				dimmer_config.groups[it->second.id] = true;
+
+				for (unsigned int address = 0;
+						address < dimmer_config.address_group.size(); address++) {
+					if (current_.lights[address] && it->second.addresses[address]) {
+						if (dimmer_config.address_group[address] != Dali::GROUP_NONE) {
+							goto invalid;
+						}
+
+						dimmer_config.addresses[address] = true;
+						dimmer_config.group_addresses[it->second.id][address] = true;
+						dimmer_config.address_group[address] = it->second.id;
+					}
+				}
+			}
+		}
+
+		return dimmer_config;
+	}
+
+invalid:
+	return {
+		.mode = DimmerMode::INDIVIDUAL,
+		.addresses{},
+		.groups{},
+		.address_group{},
+		.group_addresses{},
+		.all = false,
+	};
+}
+
+std::vector<std::string> Config::get_dimmer_groups(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return current_.dimmers[dimmer_id].groups;
 	} else {
-		return "";
+		return {};
 	}
 }
 
-void Config::set_dimmer_group(unsigned int dimmer_id, const std::string &group) {
+void Config::set_dimmer_groups(unsigned int dimmer_id, const std::string &groups) {
+	if (dimmer_id >= NUM_DIMMERS) {
+		return;
+	}
+
 	std::lock_guard lock{data_mutex_};
+	std::istringstream input{groups};
+	std::string item;
+	std::vector<std::string> new_groups;
 
-	if (dimmer_id < NUM_DIMMERS) {
-		if (!group.empty() && !valid_group_name(group, true)) {
-			return;
-		}
+	auto before = vector_text(current_.dimmers[dimmer_id].groups);
 
-		if (current_.dimmers[dimmer_id].group != group) {
-			network_.report(TAG, std::string{"Dimmer "}
-				+ std::to_string(dimmer_id) + " group: "
-				+ quoted_string(current_.dimmers[dimmer_id].group)
-				+ " -> " + quoted_string(group));
-
-			current_.dimmers[dimmer_id].group = group;
-			dirty_config();
+	while (std::getline(input, item, ',')) {
+		if (valid_group_name(item, true)) {
+			new_groups.push_back(std::move(item));
 		}
 	}
+
+	current_.dimmers[dimmer_id].groups = std::move(new_groups);
+
+	auto after = vector_text(current_.dimmers[dimmer_id].groups);
+
+	if (before != after) {
+		network_.report(TAG, std::string{"Dimmer "}
+			+ std::to_string(dimmer_id) + " groups: "
+			+ quoted_string(before) + " -> " + quoted_string(after));
+	}
+
+	dirty_config();
 }
 
 int Config::get_dimmer_encoder_steps(unsigned int dimmer_id) const {
@@ -1543,7 +1776,7 @@ Dali::addresses_t Config::parse_light_ids(const std::string &light_ids,
 	idle_only = false;
 
 	while (std::getline(input, item, ',')) {
-		auto group = current_.groups.find(item);
+		auto group = current_.groups_by_name.find(item);
 		auto dash_idx = item.find('-');
 		unsigned long begin, end;
 
@@ -1553,9 +1786,9 @@ Dali::addresses_t Config::parse_light_ids(const std::string &light_ids,
 		} else if (item == BUILTIN_GROUP_IDLE) {
 			idle_only = true;
 			continue;
-		} else if (group != current_.groups.end()) {
-			for (unsigned int i = 0; i < group->second.size(); i++) {
-				if (group->second[i]) {
+		} else if (group != current_.groups_by_name.end()) {
+			for (unsigned int i = 0; i < group->second.addresses.size(); i++) {
+				if (group->second.addresses[i]) {
 					lights[i] = true;
 				}
 			}

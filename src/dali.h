@@ -42,6 +42,7 @@ class Dali: public WakeupThread {
 public:
 	using address_t = uint8_t;
 	using group_t = uint8_t;
+	using group_fast_t = uint_fast8_t;
 	using level_t = uint8_t;
 	using level_fast_t = uint_fast8_t;
 
@@ -52,6 +53,7 @@ private:
 public:
 	static constexpr size_t num_addresses = MAX_ADDR + 1;
 	static constexpr size_t num_groups = MAX_GROUP + 1;
+	static constexpr group_t GROUP_NONE = UINT8_MAX;
 	static constexpr level_t MAX_LEVEL = 254;
 	static constexpr level_t LEVEL_NO_CHANGE = 255;
 
@@ -182,6 +184,7 @@ private:
 	bool tx_frame(uint8_t address, uint8_t data, bool repeat);
 	bool tx_address_power_level(address_t address, level_t level);
 	bool tx_group_power_level(group_t group, level_t level);
+	bool tx_broadcast_power_level(level_t level);
 
 	bool tx_address_group_add(address_t address, group_t group);
 	bool tx_group_empty(group_t group);
@@ -199,6 +202,7 @@ private:
 	rmt_obj_t *rmt_{nullptr};
 	std::array<level_fast_t,num_addresses> tx_levels_{};
 	std::array<level_fast_t,num_groups> tx_group_levels_{};
+	level_fast_t tx_broadcast_level_{LEVEL_NO_CHANGE};
 	unsigned int next_address_{0};
 	unsigned int next_group_{0};
 

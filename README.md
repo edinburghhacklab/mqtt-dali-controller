@@ -79,11 +79,28 @@ Remove a group by setting an empty value:
 dali/group/<name> (null) (retain)
 ```
 
-The reserved group names `all`, `delete`, `idle` and `levels` can't be configured.
+Sync group with the lights:
+```
+dali/group/<name> sync
+```
 
-The maximum length of a group name is 50 characters and they can only contain
+Sync all groups with the lights:
+```
+dali/group/sync (null)
+```
+
+The reserved group names `all`, `delete`, `idle`, `levels` and `sync` can't be
+configured.
+
+The maximum length of a group name is 20 characters and they can only contain
 lowercase alphanumeric characters as well as `.`, `-` and `_`. Group names must
 start with a letter.
+
+Group IDs are reported as comma-separated values in `dali/groups/ids` and are
+internally managed.
+```
+dali/groups/ids kitchen,,table,,,door,,,,,,,,,,
+```
 
 ### Switches
 
@@ -107,14 +124,13 @@ set to `off`.
 
 ### Dimmers
 
-Configure which light dimmers are present by setting the group associated with
+Configure which light dimmers are present by setting the groups associated with
 the dimmer and configuring the encoder/level steps:
 ```
-dali/dimmer/<0-4>/group <name> (retain)
+dali/dimmer/<0-4>/groups <name>,... (retain)
 dali/dimmer/<0-4>/encoder_steps <steps> (retain)
 dali/dimmer/<0-4>/level_steps <0-254> (retain)
 dali/dimmer/<0-4>/mode <individual|group> (retain)
-dali/dimmer/<0-4>/sync (null)
 ```
 
 Encoder steps can be configured in the range 1 to 127 (for forward movement) or
@@ -122,10 +138,15 @@ Encoder steps can be configured in the range 1 to 127 (for forward movement) or
 dimmer.
 
 Dimmers can operate on two modes: `individual` which allows each light to have a
-different level, or on lights as a DALI `group`. Using groups on the DALI
-interface will be faster but all lights in the group must have the same level
-so the level will be set to the average of all lights whenever dimming starts.
-Synchronise the dimmer groups using the `sync` command.
+different level, or on lights as one or more DALI `group`s. Using groups on the
+DALI interface will be faster but all lights in the group must have the same
+level so the level will be set to the average of all lights whenever dimming
+starts. Multiple groups can be specified but if they overlap the dimmer will be
+ignored; each group will be dimmed independently.
+
+Synchronise the DALI groups before dimming otherwise unexpected behaviour will
+happen, particularly if the previously stored groups overlap on the same dimmer
+and that can no longer be identified.
 
 ### Presets
 

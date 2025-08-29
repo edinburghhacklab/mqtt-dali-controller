@@ -39,6 +39,7 @@ struct LightsState {
 	std::array<Dali::level_fast_t,Dali::num_addresses> levels; /**< Individual light levels */
 	std::array<Dali::level_fast_t,Dali::num_groups> group_levels; /**< Group light levels */
 	Dali::addresses_t group_level_addresses; /**< Individual lights where the level has been set on the group */
+	Dali::level_fast_t broadcast_level; /**< Broadcast light level */
 	Dali::groups_t group_sync; /**< Sync group members to DALI bus */
 	Dali::addresses_t force_refresh; /**< Force refresh individual lights */
 	bool broadcast_power_on_level; /**< Broadcast store of power on level to DALI bus */
@@ -68,7 +69,8 @@ public:
 	void set_power(const Dali::addresses_t &lights, bool on);
 	void dim_adjust(unsigned int dimmer_id, long level);
 
-	void request_group_sync(unsigned int dimmer_id);
+	void request_group_sync();
+	void request_group_sync(const std::string &group);
 	void completed_group_sync(Dali::group_t group) const;
 
 	void request_broadcast_power_on_level();
@@ -113,6 +115,7 @@ private:
 	mutable std::recursive_mutex lights_mutex_;
 	std::array<Dali::level_fast_t,Dali::num_addresses> levels_{};
 	std::array<Dali::level_fast_t,Dali::num_groups> group_levels_{};
+	Dali::level_fast_t broadcast_level_{Dali::LEVEL_NO_CHANGE};
 	Dali::addresses_t group_level_addresses_{};
 	mutable Dali::groups_t group_sync_{};
 	mutable Dali::addresses_t force_refresh_;
