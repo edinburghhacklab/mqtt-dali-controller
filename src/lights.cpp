@@ -235,9 +235,11 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 			if (preset_levels[i] != Dali::LEVEL_NO_CHANGE) {
 				if (lights[i]) {
 					levels_[i] = preset_levels[i];
-					republish_presets_.insert(active_presets_[i]);
-					active_presets_[i] = name;
-					republish_presets_.insert(active_presets_[i]);
+					if (active_presets_[i] != name) {
+						republish_presets_.insert(active_presets_[i]);
+						republish_presets_.insert(name);
+						active_presets_[i] = name;
+					}
 					changed = true;
 				}
 			}
@@ -293,9 +295,11 @@ void Lights::set_level(const std::string &light_ids, long level) {
 		}
 
 		levels_[i] = level;
-		republish_presets_.insert(active_presets_[i]);
-		active_presets_[i] = RESERVED_PRESET_CUSTOM;
-		republish_presets_.insert(active_presets_[i]);
+		if (active_presets_[i] != RESERVED_PRESET_CUSTOM) {
+			republish_presets_.insert(active_presets_[i]);
+			republish_presets_.insert(RESERVED_PRESET_CUSTOM);
+			active_presets_[i] = RESERVED_PRESET_CUSTOM;
+		}
 		changed = true;
 	}
 
@@ -451,9 +455,11 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 		}
 
 		dim_time_us_[i] = now;
-		republish_presets_.insert(active_presets_[i]);
-		active_presets_[i] = RESERVED_PRESET_CUSTOM;
-		republish_presets_.insert(active_presets_[i]);
+		if (active_presets_[i] != RESERVED_PRESET_CUSTOM) {
+			republish_presets_.insert(active_presets_[i]);
+			republish_presets_.insert(RESERVED_PRESET_CUSTOM);
+			active_presets_[i] = RESERVED_PRESET_CUSTOM;
+		}
 		changed = true;
 	}
 
