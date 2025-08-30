@@ -71,6 +71,6 @@ private:
 	const Config &config_;
 	Lights &lights_;
 
-	std::array<RotaryEncoder,NUM_DIMMERS> encoder_;
+	//std::array<RotaryEncoder,NUM_DIMMERS> encoder_;
 	std::array<DimmerState,NUM_DIMMERS> state_;
 };

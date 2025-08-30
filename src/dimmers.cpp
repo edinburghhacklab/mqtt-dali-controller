@@ -19,6 +19,7 @@
 #include "dimmers.h"
 
 #include <Arduino.h>
+#include <driver/adc.h>
 #include <esp_crc.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
@@ -67,19 +68,62 @@ const char* Dimmers::mode_text(DimmerMode mode) {
 
 Dimmers::Dimmers(Network &network, const Config &config, Lights &lights)
 		: WakeupThread("dimmers", true), network_(network), config_(config),
-		lights_(lights), encoder_({
+		lights_(lights)/*, encoder_({
 			RotaryEncoder{DIMMER_GPIO[0]},
 			RotaryEncoder{DIMMER_GPIO[1]},
 			RotaryEncoder{DIMMER_GPIO[2]},
 			RotaryEncoder{DIMMER_GPIO[3]},
 			RotaryEncoder{DIMMER_GPIO[4]},
-		}) {
+		})*/ {
 }
 
 void Dimmers::setup() {
-	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
-		encoder_[i].start(*this);
+	// for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
+	// 	encoder_[i].start(*this);
+	// }
+
+	// gpio_config_t config{};
+
+	// config.pin_bit_mask = 0x3FF << 1;
+	// config.mode = GPIO_MODE_INPUT;
+	// config.pull_up_en = GPIO_PULLUP_ENABLE;
+	// config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+	// config.intr_type = GPIO_INTR_DISABLE;
+
+	// ESP_ERROR_CHECK(gpio_config(&config));
+
+	adc_digi_init_config_t adc_dma_config = {
+		.max_store_buf_size = 1024,
+		.conv_num_each_intr = 256,
+		// .adc1_chan_mask = 0x3FF,
+		.adc1_chan_mask = 0x3,
+		.adc2_chan_mask = 0,
+	};
+	ESP_ERROR_CHECK(adc_digi_initialize(&adc_dma_config));
+
+	adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX];
+
+	adc_digi_configuration_t dig_cfg = {
+        .conv_limit_en = 0,
+        .conv_limit_num = 0,
+		.pattern_num = 2,
+		.adc_pattern = adc_pattern,
+        .sample_freq_hz = 1024,
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+    };
+
+	for (uint8_t i = 0; i < dig_cfg.pattern_num; i++) {
+		adc_pattern[i] = {
+			.atten = ADC_ATTEN_DB_12,
+			.channel = i,
+			.unit = 0,
+			.bit_width = SOC_ADC_DIGI_MAX_BITWIDTH,
+		};
 	}
+
+	ESP_ERROR_CHECK(adc_digi_controller_configure(&dig_cfg));
+	adc_digi_start();
 
 	std::thread t;
 	make_thread(t, "dimmers", 8192, 1, 20, &Dimmers::run_loop, this);
@@ -93,10 +137,11 @@ unsigned long Dimmers::run_tasks() {
 		run_dimmer(i);
 	}
 
-	return WATCHDOG_INTERVAL_MS;
+	return 100; //WATCHDOG_INTERVAL_MS;
 }
 
 void Dimmers::run_dimmer(unsigned int dimmer_id) {
+#if 0
 	long encoder_steps = config_.get_dimmer_encoder_steps(dimmer_id);
 	long encoder_change = encoder_[dimmer_id].read();
 
@@ -134,9 +179,42 @@ void Dimmers::run_dimmer(unsigned int dimmer_id) {
 	long level_change = std::max(-(long)MAX_LEVEL, std::min((long)MAX_LEVEL, change_count * level_steps));
 
 	lights_.dim_adjust(dimmer_id, level_change);
+#endif
+
+	if (dimmer_id != 0) {
+		return;
+	}
+
+	uint32_t ret_num = 0;
+	union {
+		adc_digi_output_data_t result[256 / sizeof(adc_digi_output_data_t)];
+		uint8_t result_u8[256];
+	};
+	memset(result_u8, 0, sizeof(result_u8));
+	unsigned int low[2] = { ~0U, ~0U };
+	unsigned int high[2] = { 0, 0 };
+
+	esp_err_t ret = adc_digi_read_bytes(result_u8, 256, &ret_num, 0);
+	if (ret == ESP_OK || ret == ESP_ERR_INVALID_STATE) {
+		for (int i = 0; i < ret_num / sizeof(adc_digi_output_data_t); i++) {
+			adc_digi_output_data_t &p = result[i];
+
+			if (p.type2.channel < 2) {
+				low[p.type2.channel] = std::min(low[p.type2.channel], p.type2.data);
+				high[p.type2.channel] = std::max(high[p.type2.channel], p.type2.data);
+			}
+
+			//ESP_LOGE(TAG, "%d=%u", p.type2.channel, p.type2.data);
+		}
+
+		ESP_LOGE(TAG, "%d=%u..%u %d=%u..%u", 0, low[0], high[0], 1, low[1], high[1]);
+	} else {
+		//ESP_LOGE(TAG, "ADC %d (%u)", ret, ret_num);
+	}
 }
 
 void Dimmers::publish_debug(unsigned int dimmer_id) {
+#if 0
 	static std::array<RotaryEncoderDebug,RotaryEncoder::DEBUG_RECORDS> records;
 
 	if (dimmer_id >= NUM_DIMMERS) {
@@ -161,4 +239,5 @@ void Dimmers::publish_debug(unsigned int dimmer_id) {
 
 		network_.publish(topic, output);
 	}
+#endif
 }
