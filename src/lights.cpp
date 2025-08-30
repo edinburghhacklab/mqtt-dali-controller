@@ -353,8 +353,13 @@ void Lights::set_power(const Dali::addresses_t &lights, bool on) {
 	}
 }
 
-void Lights::dim_adjust(unsigned int dimmer_id, long level) {
+void Lights::dim_adjust(unsigned int dimmer_id, long level,
+		unsigned int dimmer_group_id) {
 	if (dimmer_id >= NUM_DIMMERS) {
+		return;
+	}
+
+	if (dimmer_group_id >= NUM_DIMMER_GROUPS) {
 		return;
 	}
 
@@ -464,6 +469,10 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 		if (dali_) {
 			dali_->wake_up();
 		}
+
+		network_.publish(FixedConfig::mqttTopic("/dimmer/")
+			+ std::to_string(dimmer_id) + "/change/"
+			+ std::to_string(dimmer_group_id), std::to_string(level));
 
 		publish_levels(true);
 	}

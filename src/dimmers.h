@@ -28,6 +28,7 @@
 #include "util.h"
 
 static constexpr unsigned int NUM_DIMMERS = 5;
+static constexpr unsigned int NUM_DIMMER_GROUPS = 4;
 static constexpr int MIN_ENCODER_STEPS = -127;
 static constexpr int MAX_ENCODER_STEPS = 127;
 
@@ -45,6 +46,7 @@ public:
 	DimmerState() = default;
 
 	long encoder_steps{0};
+	RotaryMode encoder_mode{RotaryMode::NOT_AB};
 };
 
 class Dimmers: public WakeupThread {

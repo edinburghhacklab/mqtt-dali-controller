@@ -27,6 +27,7 @@
 #include <atomic>
 #include <array>
 #include <cstring>
+#include <utility>
 
 #include "thread.h"
 
@@ -51,8 +52,33 @@ void RotaryEncoder::start(WakeupThread &wakeup) {
 	config.intr_type = GPIO_INTR_DISABLE;
 
 	ESP_ERROR_CHECK(gpio_config(&config));
-	state_[0] = gpio_get_level(pins_[0]) == 0;
-	state_[1] = gpio_get_level(pins_[1]) == 0;
+	uint64_t now_us = esp_timer_get_time();
+	signal_[0].level = gpio_get_level(pins_[0]);
+	signal_[1].level = gpio_get_level(pins_[1]);
+	signal_[0].active_low = signal_[0].level;
+	signal_[1].active_low = signal_[1].level;
+
+	if (!signal_[0].active_low || !signal_[1].active_low) {
+		if (!signal_[0].active_low) {
+			ESP_ERROR_CHECK(gpio_set_pull_mode(pins_[0], GPIO_PULLDOWN_ONLY));
+		}
+		if (!signal_[1].active_low) {
+			ESP_ERROR_CHECK(gpio_set_pull_mode(pins_[1], GPIO_PULLDOWN_ONLY));
+		}
+		now_us = esp_timer_get_time();
+		signal_[0].level = gpio_get_level(pins_[0]);
+		signal_[1].level = gpio_get_level(pins_[1]);
+	}
+
+	if (signal_[0].active()) {
+		signal_[0].active_us = now_us;
+	}
+	if (signal_[1].active()) {
+		signal_[1].active_us = now_us;
+	}
+
+	update_mode();
+
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[0], rotary_encoder_interrupt_handler_0, this));
 	ESP_ERROR_CHECK(gpio_isr_handler_add(pins_[1], rotary_encoder_interrupt_handler_1, this));
 	ESP_ERROR_CHECK(gpio_set_intr_type(pins_[0], GPIO_INTR_ANYEDGE));
@@ -61,8 +87,15 @@ void RotaryEncoder::start(WakeupThread &wakeup) {
 	ESP_ERROR_CHECK(gpio_intr_enable(pins_[1]));
 }
 
-long RotaryEncoder::read() {
-	return change_.exchange(0L);
+IRAM_ATTR inline void RotaryEncoder::update_mode() {
+	mode_.store(static_cast<RotaryMode>(
+		(signal_[0].active_low ? 0 : 1) | (signal_[1].active_low ? 0 : 2)));
+}
+
+std::pair<RotaryMode,long> RotaryEncoder::read() {
+	static_assert(decltype(change_)::is_always_lock_free);
+	static_assert(decltype(mode_)::is_always_lock_free);
+	return {mode_.load(), change_.exchange(0L)};
 }
 
 void RotaryEncoder::debug(std::array<RotaryEncoderDebug,DEBUG_RECORDS> &records) const {
@@ -81,36 +114,89 @@ IRAM_ATTR void rotary_encoder_interrupt_handler_1(void *arg) {
 }
 
 IRAM_ATTR void RotaryEncoder::interrupt_handler(int pin_id) {
-	bool state = gpio_get_level(pins_[pin_id]) == 0;
+	bool level = gpio_get_level(pins_[pin_id]);
+	uint64_t now_us = esp_timer_get_time();
+	auto &signal = signal_[pin_id];
 
 	debug_[debug_pos_] = {
 		.pin = (uint32_t)pin_id,
-		.state = state,
-		.time_us = (uint32_t)esp_timer_get_time(),
+		.level = level,
+		.time_us = (uint32_t)now_us,
 	};
 	debug_pos_ = (debug_pos_ + 1) % debug_.size();
 
-	if (state == state_[pin_id]) {
+	if (level == signal.level) {
 		return;
 	}
 
-	state_[pin_id] = state;
+	signal.level = level;
 
-	if (!state) {
-		first_ = -1;
-		return;
+	bool active = signal.active();
+
+	if (!active) {
+		if (signal.active_us && now_us - signal.active_us >= ACTIVE_CHANGE_US) {
+			signal.active_us = 0;
+			signal.active_low ^= true;
+			ESP_ERROR_CHECK(gpio_set_pull_mode(pins_[pin_id],
+				signal.active_low ? GPIO_PULLUP_ONLY : GPIO_PULLDOWN_ONLY));
+			active = signal.active();
+			count_ = 0;
+		}
 	}
 
-	if (first_ == -1) {
-		first_ = pin_id;
-		return;
+	if (active) {
+		signal.active_us = now_us;
 	}
 
-	if (first_ == 0) {
-		change_.fetch_add(1);
-	} else {
-		change_.fetch_sub(1);
+	if (count_ && now_us - start_us_ >= ENCODER_CHANGE_US) {
+		count_ = 0;
 	}
 
-	wakeup_->wake_up_isr();
+	switch (count_) {
+	case 0:
+		if (active) {
+			count_++;
+			first_ = pin_id;
+			start_us_ = now_us;
+		}
+		break;
+
+	case 1:
+		if (active && first_ != pin_id) {
+			count_++;
+		} else {
+			count_ = 0;
+		}
+		break;
+
+	case 2:
+		if (!active && first_ == pin_id) {
+			count_++;
+		} else {
+			count_ = 0;
+		}
+		break;
+
+	case 3:
+		if (!active && first_ != pin_id) {
+			count_ = 0;
+			update_mode();
+
+			if (first_ == 0) {
+				change_.fetch_add(1);
+			} else {
+				change_.fetch_sub(1);
+			}
+
+			wakeup_->wake_up_isr();
+			return;
+		} else {
+			count_ = 0;
+		}
+		break;
+
+	default:
+		count_ = 0;
+		break;
+	}
 }

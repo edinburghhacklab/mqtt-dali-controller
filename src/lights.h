@@ -67,7 +67,7 @@ public:
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const Dali::addresses_t &lights, bool on);
-	void dim_adjust(unsigned int dimmer_id, long level);
+	void dim_adjust(unsigned int dimmer_id, long level, unsigned int dimmer_group_id);
 
 	void request_group_sync();
 	void request_group_sync(const std::string &group);

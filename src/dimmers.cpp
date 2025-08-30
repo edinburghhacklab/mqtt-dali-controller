@@ -98,13 +98,18 @@ unsigned long Dimmers::run_tasks() {
 
 void Dimmers::run_dimmer(unsigned int dimmer_id) {
 	long encoder_steps = config_.get_dimmer_encoder_steps(dimmer_id);
-	long encoder_change = encoder_[dimmer_id].read();
+	auto encoder_change = encoder_[dimmer_id].read();
 
 	if (encoder_steps == 0) {
 		state_[dimmer_id].encoder_steps = 0;
 	} else {
+		if (state_[dimmer_id].encoder_mode != encoder_change.first) {
+			state_[dimmer_id].encoder_mode = encoder_change.first;
+			state_[dimmer_id].encoder_steps = 0;
+		}
+
 		state_[dimmer_id].encoder_steps = std::max(-LONG_MAX,
-			state_[dimmer_id].encoder_steps + encoder_change);
+			state_[dimmer_id].encoder_steps + encoder_change.second);
 	}
 
 	if (state_[dimmer_id].encoder_steps == 0) {
@@ -133,7 +138,8 @@ void Dimmers::run_dimmer(unsigned int dimmer_id) {
 	long level_steps = config_.get_dimmer_level_steps(dimmer_id);
 	long level_change = std::max(-(long)MAX_LEVEL, std::min((long)MAX_LEVEL, change_count * level_steps));
 
-	lights_.dim_adjust(dimmer_id, level_change);
+	lights_.dim_adjust(dimmer_id, level_change,
+		static_cast<unsigned int>(state_[dimmer_id].encoder_mode));
 }
 
 void Dimmers::publish_debug(unsigned int dimmer_id) {
@@ -153,10 +159,10 @@ void Dimmers::publish_debug(unsigned int dimmer_id) {
 
 		output += std::to_string(record.time_us);
 		output += ' ';
-		if (record.state) {
-			output += record.pin == 0 ? 'A' : 'B';
-		} else {
+		if (record.level) {
 			output += record.pin == 0 ? 'a' : 'b';
+		} else {
+			output += record.pin == 0 ? 'A' : 'B';
 		}
 
 		network_.publish(topic, output);
