@@ -21,6 +21,7 @@
 #include <Arduino.h>
 
 #include <mutex>
+#include <string>
 
 class Config;
 class Dali;
@@ -35,7 +36,7 @@ public:
 		Dimmers &dimmers, Lights &lights, UI &ui);
 
 	void connected();
-	void receive(const char *topic, const uint8_t *payload, unsigned int length);
+	void receive(std::string &&topic, std::string &&payload);
 	bool startup_complete();
 
 private:

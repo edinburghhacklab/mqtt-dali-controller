@@ -59,7 +59,7 @@ public:
 	Network();
 
 	void setup(std::function<void()> connected,
-		std::function<void(char*, uint8_t*, unsigned int)> receive);
+		std::function<void(std::string &&topic, std::string &&payload)> receive);
 	void loop();
 	inline std::string device_id() { return device_id_.c_str(); }
 	inline bool connected() { return wifi_up_ && mqtt_.connected(); }
@@ -67,12 +67,16 @@ public:
 	void subscribe(const std::string &topic);
 	void publish(const std::string &topic, const std::string &payload, bool retain = false);
 	void send_queued_messages();
+	size_t received_message_count();
+	size_t sent_message_count();
 	size_t maximum_queue_size();
 
 private:
 	static constexpr const char *TAG = "UI";
 	static constexpr size_t MAX_QUEUED_MESSAGES = 1000;
 	static constexpr size_t SEND_QUEUE_DIVISOR = 10;
+
+	void receive(char *topic, uint8_t *payload, unsigned int length);
 
 	String device_id_;
 	WiFiClient client_;
@@ -82,11 +86,14 @@ private:
 	uint64_t last_mqtt_us_{0};
 
 	std::function<void()> connected_;
+	std::function<void(std::string &&topic, std::string &&payload)> receive_;
 
 	std::mutex messages_mutex_;
 	std::deque<Message> message_queue_;
 	std::deque<Message> send_messages_;
 	size_t dropped_messages_{0};
 	size_t oversized_messages_{0};
+	size_t received_messages_{0};
+	size_t sent_messages_{0};
 	size_t maximum_queue_size_{0};
 };

@@ -116,26 +116,23 @@ void API::startup_complete(bool state) {
 	ui_.startup_complete(state);
 }
 
-void API::receive(const char *topic, const uint8_t *payload, unsigned int length) {
-	std::string topic_str{topic};
-	std::string payload_str{(const char*)payload, length};
-
-	if (topic_str == "meta/mqtt-agents/poll") {
+void API::receive(std::string &&topic, std::string &&payload) {
+	if (topic == "meta/mqtt-agents/poll") {
 		network_.publish("meta/mqtt-agents/reply", network_.device_id());
-		topic_str.clear();
-	} else if (topic_str.rfind(topic_prefix_, 0) == 0) {
-		topic_str = topic_str.substr(topic_prefix_.size());
+		topic.clear();
+	} else if (topic.rfind(topic_prefix_, 0) == 0) {
+		topic = topic.substr(topic_prefix_.size());
 	} else {
-		topic_str.clear();
+		topic.clear();
 	}
 
-	TopicParser topic_parser{topic_str};
+	TopicParser topic_parser{topic};
 
-	topic_parser.get_string(topic_str);
+	topic_parser.get_string(topic);
 
-	if (topic_str.empty()) {
+	if (topic.empty()) {
 		/* Do nothing */
-	} else if (topic_str == "preset") {
+	} else if (topic == "preset") {
 		std::string preset_name;
 
 		if (topic_parser.get_string(preset_name)) {
@@ -145,134 +142,134 @@ void API::receive(const char *topic, const uint8_t *payload, unsigned int length
 				if (light_ids == RESERVED_GROUP_DELETE) {
 					config_.delete_preset(preset_name);
 				} else if (light_ids == RESERVED_GROUP_LEVELS) {
-					if (!payload_str.empty()) {
-						config_.set_preset(preset_name, payload_str);
+					if (!payload.empty()) {
+						config_.set_preset(preset_name, payload);
 					}
 				} else {
 					long value = Config::LEVEL_NO_CHANGE;
 
-					if (payload_str.empty()
-							|| long_from_string(payload_str, value)) {
+					if (payload.empty()
+							|| long_from_string(payload, value)) {
 						config_.set_preset(preset_name, light_ids, value);
 					}
 				}
 			} else {
 				if (preset_name == RESERVED_PRESET_ORDER) {
-					config_.set_ordered_presets(payload_str);
+					config_.set_ordered_presets(payload);
 				} else {
-					if (payload_str.empty()) {
-						payload_str = BUILTIN_GROUP_ALL;
+					if (payload.empty()) {
+						payload = BUILTIN_GROUP_ALL;
 					}
 
-					lights_.select_preset(preset_name, payload_str);
+					lights_.select_preset(preset_name, payload);
 				}
 			}
 		}
-	} else if (topic_str == "set") {
+	} else if (topic == "set") {
 		std::string light_ids;
 		long value;
 
 		if (topic_parser.get_string(light_ids)
-				&& long_from_string(payload_str, value)) {
+				&& long_from_string(payload, value)) {
 			lights_.set_level(light_ids, value);
 		}
-	} else if (topic_str == "startup_complete") {
+	} else if (topic == "startup_complete") {
 		if (!startup_complete_) {
 			ESP_LOGE(TAG, "Startup complete");
 			startup_complete(true);
 			config_.save_config();
 			config_.publish_config();
 		}
-	} else if (topic_str == "reboot") {
+	} else if (topic == "reboot") {
 		config_.save_config();
 
 		std::lock_guard lock{file_mutex_};
 
 		esp_restart();
-	} else if (topic_str == "reload") {
+	} else if (topic == "reload") {
 		config_.load_config();
 		config_.save_config();
 		config_.publish_config();
 		lights_.address_config_changed();
 		dali_.wake_up();
-	} else if (topic_str == "status") {
+	} else if (topic == "status") {
 		ui_.status_report();
-	} else if (topic_str == "ota") {
-		if (topic_parser.get_string(topic_str)) {
-			if (topic_str == "update") {
+	} else if (topic == "ota") {
+		if (topic_parser.get_string(topic)) {
+			if (topic == "update") {
 				ui_.ota_update();
-			} else if (topic_str == "good") {
+			} else if (topic == "good") {
 				ui_.ota_good();
-			} else if (topic_str == "bad") {
+			} else if (topic == "bad") {
 				ui_.ota_bad();
 			}
 		}
-	} else if (topic_str == "addresses") {
-		config_.set_addresses(payload_str);
+	} else if (topic == "addresses") {
+		config_.set_addresses(payload);
 		lights_.address_config_changed(BUILTIN_GROUP_ALL);
 		dali_.wake_up();
-	} else if (topic_str == "switch") {
+	} else if (topic == "switch") {
 		long switch_id;
 
 		if (topic_parser.get_long(switch_id)
-				&& topic_parser.get_string(topic_str)) {
-			if (topic_str == "group") {
-				config_.set_switch_group(switch_id, payload_str);
-			} else if (topic_str == "name") {
-				config_.set_switch_name(switch_id, payload_str);
-			} else if (topic_str == "preset") {
-				config_.set_switch_preset(switch_id, payload_str);
+				&& topic_parser.get_string(topic)) {
+			if (topic == "group") {
+				config_.set_switch_group(switch_id, payload);
+			} else if (topic == "name") {
+				config_.set_switch_name(switch_id, payload);
+			} else if (topic == "preset") {
+				config_.set_switch_preset(switch_id, payload);
 			}
 		}
-	} else if (topic_str == "dimmer") {
+	} else if (topic == "dimmer") {
 		long dimmer_id;
 
 		if (topic_parser.get_long(dimmer_id)
-				&& topic_parser.get_string(topic_str)) {
-			if (topic_str == "groups") {
-				config_.set_dimmer_groups(dimmer_id, payload_str);
-			} else if (topic_str == "encoder_steps") {
+				&& topic_parser.get_string(topic)) {
+			if (topic == "groups") {
+				config_.set_dimmer_groups(dimmer_id, payload);
+			} else if (topic == "encoder_steps") {
 				long value;
 
-				if (long_from_string(payload_str, value)) {
+				if (long_from_string(payload, value)) {
 					config_.set_dimmer_encoder_steps(dimmer_id, value);
 				}
-			} else if (topic_str == "level_steps") {
+			} else if (topic == "level_steps") {
 				long value;
 
-				if (long_from_string(payload_str, value)) {
+				if (long_from_string(payload, value)) {
 					config_.set_dimmer_level_steps(dimmer_id, value);
 				}
-			} else if (topic_str == "mode") {
-				config_.set_dimmer_mode(dimmer_id, payload_str);
-			} else if (topic_str == "get_debug") {
+			} else if (topic == "mode") {
+				config_.set_dimmer_mode(dimmer_id, payload);
+			} else if (topic == "get_debug") {
 				dimmers_.publish_debug(dimmer_id);
 			}
 		}
-	} else if (topic_str == "group") {
+	} else if (topic == "group") {
 		std::string group_name;
 
 		if (topic_parser.get_string(group_name)) {
 			if (group_name == RESERVED_GROUP_SYNC) {
 				lights_.request_group_sync();
-			} else if (payload_str.empty()) {
+			} else if (payload.empty()) {
 				config_.delete_group(group_name);
-			} else if (payload_str == "sync") {
+			} else if (payload == "sync") {
 				lights_.request_group_sync(group_name);
 			} else {
-				if (config_.set_group_addresses(group_name, payload_str)) {
+				if (config_.set_group_addresses(group_name, payload)) {
 					lights_.address_config_changed(group_name);
 					lights_.request_group_sync(group_name);
 				}
 			}
 		}
-	} else if (topic_str == "command") {
-		if (topic_parser.get_string(topic_str)) {
-			if (topic_str == "store") {
-				if (topic_parser.get_string(topic_str)) {
-					if (topic_str == "power_on_level") {
+	} else if (topic == "command") {
+		if (topic_parser.get_string(topic)) {
+			if (topic == "store") {
+				if (topic_parser.get_string(topic)) {
+					if (topic == "power_on_level") {
 						lights_.request_broadcast_power_on_level();
-					} else if (topic_str == "system_failure_level") {
+					} else if (topic == "system_failure_level") {
 						lights_.request_broadcast_system_failure_level();
 					}
 				}

@@ -191,6 +191,8 @@ void UI::publish_stats() {
 	}
 
 	network_.publish(topic + "/stack/min_size_bytes", std::to_string(uxTaskGetStackHighWaterMark(nullptr)));
+	network_.publish(topic + "/messages/received", std::to_string(network_.received_message_count()));
+	network_.publish(topic + "/messages/sent", std::to_string(network_.sent_message_count()));
 	network_.publish(topic + "/max_queue_size", std::to_string(network_.maximum_queue_size()));
 	network_.publish(topic + "/temperature_c", std::to_string(temperatureRead()));
 	network_.publish(topic + "/uptime_us", std::to_string(esp_timer_get_time()));

@@ -122,8 +122,36 @@ void Network::send_queued_messages() {
 
 		mqtt_.publish(message.topic(), payload.first, payload.second, message.retain());
 		send_messages_.pop_front();
+		sent_messages_++;
 		yield();
 	}
+}
+
+void Network::receive(char *topic, uint8_t *payload, unsigned int length) {
+	std::unique_lock lock{messages_mutex_};
+
+	received_messages_++;
+	lock.unlock();
+
+	if (receive_) {
+		receive_(topic, {(const char*)payload, length});
+	}
+}
+
+size_t Network::received_message_count() {
+	std::lock_guard lock{messages_mutex_};
+	size_t count = received_messages_;
+
+	received_messages_ = 0;
+	return count;
+}
+
+size_t Network::sent_message_count() {
+	std::lock_guard lock{messages_mutex_};
+	size_t count = sent_messages_;
+
+	sent_messages_ = 0;
+	return count;
 }
 
 size_t Network::maximum_queue_size() {
@@ -135,7 +163,9 @@ size_t Network::maximum_queue_size() {
 }
 
 void Network::setup(std::function<void()> connected,
-		std::function<void(char*, uint8_t*, unsigned int)> receive) {
+		std::function<void(std::string &&topic, std::string &&payload)> receive) {
+	using namespace std::placeholders;
+
 	WiFi.persistent(false);
 
 	std::string hostname = WiFi.getHostname();
@@ -151,9 +181,10 @@ void Network::setup(std::function<void()> connected,
 	WiFi.mode(WIFI_STA);
 
 	connected_ = connected;
+	receive_ = receive;
 	mqtt_.setServer(FixedConfig::mqttHostname(), FixedConfig::mqttPort());
 	mqtt_.setBufferSize(Message::BUFFER_SIZE);
-	mqtt_.setCallback(receive);
+	mqtt_.setCallback(std::bind(&Network::receive, this, _1, _2, _3));
 }
 
 void Network::loop() {

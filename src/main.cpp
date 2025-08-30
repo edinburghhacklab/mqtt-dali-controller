@@ -103,7 +103,7 @@ void setup() {
 	ui.set_switches(switches);
 
 	network.setup(std::bind(&API::connected, api),
-		std::bind(&API::receive, api, _1, _2, _3));
+		std::bind(&API::receive, api, _1, _2));
 
 	if (ota_verification_pending()) {
 		const esp_app_desc_t *desc = esp_ota_get_app_description();
