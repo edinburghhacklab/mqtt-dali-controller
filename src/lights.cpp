@@ -384,8 +384,10 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 					continue;
 				}
 
-				broadcast_level += levels_[address];
-				count++;
+				if (levels_[address] != Dali::LEVEL_NO_CHANGE) {
+					broadcast_level += levels_[address];
+					count++;
+				}
 			}
 
 			if (count > 0) {
@@ -415,8 +417,10 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 						continue;
 					}
 
-					group_level[group] += levels_[address];
-					count++;
+					if (levels_[address] != Dali::LEVEL_NO_CHANGE) {
+						group_level[group] += levels_[address];
+						count++;
+					}
 				}
 
 				if (count > 0) {
