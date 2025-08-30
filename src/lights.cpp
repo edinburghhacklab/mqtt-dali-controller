@@ -658,12 +658,13 @@ void Lights::publish_active_presets() {
 }
 
 void Lights::publish_levels(bool force) {
+	std::lock_guard lock{lights_mutex_};
+
 	if (!force && last_publish_levels_us_
-			&& esp_timer_get_time() - last_publish_active_us_ < ONE_M) {
+			&& esp_timer_get_time() - last_publish_levels_us_ < ONE_M) {
 		return;
 	}
 
-	std::lock_guard lock{lights_mutex_};
 	const auto addresses = config_.get_addresses();
 	std::vector<char> buffer(3 * levels_.size() + 1);
 	size_t offset = 0;
