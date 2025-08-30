@@ -450,6 +450,8 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 			} else {
 				levels_[i] = group_level[dimmer_config.address_group[i]];
 			}
+		} else if (levels_[i] == Dali::LEVEL_NO_CHANGE) {
+			continue;
 		} else {
 			levels_[i] = std::max(0L, std::min((long)MAX_LEVEL, (long)levels_[i] + level));
 		}

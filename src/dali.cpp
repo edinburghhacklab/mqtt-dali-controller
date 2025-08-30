@@ -123,7 +123,7 @@ unsigned long Dali::run_tasks() {
 			if (state.broadcast_level == LEVEL_NO_CHANGE) {
 				tx_broadcast_level_ = LEVEL_NO_CHANGE;
 			} else if (tx_broadcast_power_level(state.broadcast_level)) {
-				tx_broadcast_level_= state.broadcast_level;
+				tx_broadcast_level_ = state.broadcast_level;
 				changed = true;
 				refresh = false;
 				count++;
