@@ -256,15 +256,15 @@ void Lights::select_preset(std::string name, const std::string &light_ids, bool 
 	if (changed) {
 		save_rtc_state();
 
-		if (dali_) {
-			dali_->wake_up();
-		}
-
 		if (!internal) {
 			network_.report(TAG, config_.lights_text(lights) + " = " + name + (idle_only ? " (idle only)" : ""));
 		}
 
 		publish_levels(true);
+
+		if (dali_) {
+			dali_->wake_up();
+		}
 	}
 }
 
@@ -304,12 +304,13 @@ void Lights::set_level(const std::string &light_ids, long level) {
 	if (changed) {
 		save_rtc_state();
 
+		network_.report(TAG, config_.lights_text(lights) + " = " + std::to_string(level));
+
+		publish_levels(true);
+
 		if (dali_) {
 			dali_->wake_up();
 		}
-
-		network_.report(TAG, config_.lights_text(lights) + " = " + std::to_string(level));
-		publish_levels(true);
 	}
 }
 
@@ -461,11 +462,11 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 	if (changed) {
 		save_rtc_state();
 
+		publish_levels(true);
+
 		if (dali_) {
 			dali_->wake_up();
 		}
-
-		publish_levels(true);
 	}
 }
 
