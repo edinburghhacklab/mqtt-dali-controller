@@ -462,6 +462,9 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 	if (changed) {
 		save_rtc_state();
 
+		network_.publish(FixedConfig::mqttTopic("/dimmer/")
+			+ std::to_string(dimmer_id) + "/change", std::to_string(level));
+
 		publish_levels(true);
 
 		if (dali_) {
