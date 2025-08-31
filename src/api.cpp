@@ -34,13 +34,13 @@
 #include "ui.h"
 #include "util.h"
 
-class TopicParser {
+class StringParser {
 public:
-	explicit TopicParser(const std::string &topic) {
+	StringParser(const std::string &topic, char sep) {
 		std::istringstream input{topic};
 		std::string item;
 
-		while (std::getline(input, item, '/')) {
+		while (std::getline(input, item, sep)) {
 			topic_.push_back(std::move(item));
 		}
 	}
@@ -80,7 +80,7 @@ void API::connected() {
 	startup_complete(false);
 
 	network_.subscribe(FixedConfig::mqttTopic("/startup_complete"));
-	network_.subscribe("meta/mqtt-agents/poll");
+	network_.subscribe(FixedConfig::mqttTopic("/x"));
 	network_.subscribe(FixedConfig::mqttTopic("/reboot"));
 	network_.subscribe(FixedConfig::mqttTopic("/reload"));
 	network_.subscribe(FixedConfig::mqttTopic("/status"));
@@ -102,6 +102,7 @@ void API::connected() {
 	network_.subscribe(FixedConfig::mqttTopic("/set/+"));
 	network_.subscribe(FixedConfig::mqttTopic("/command/store/power_on_level"));
 	network_.subscribe(FixedConfig::mqttTopic("/command/store/system_failure_level"));
+	network_.subscribe("meta/mqtt-agents/poll");
 	network_.publish("meta/mqtt-agents/announce", network_.device_id());
 	network_.publish(FixedConfig::mqttTopic("/startup_complete"), "");
 }
@@ -126,12 +127,28 @@ void API::receive(std::string &&topic, std::string &&payload) {
 		topic.clear();
 	}
 
-	TopicParser topic_parser{topic};
+	StringParser topic_parser{topic, '/'};
 
 	topic_parser.get_string(topic);
 
 	if (topic.empty()) {
 		/* Do nothing */
+	} else if (topic == "x") {
+		StringParser payload_parser{payload, ' '};
+		std::string command;
+
+		if (payload_parser.get_string(command)) {
+			if (command == "dg" || command == "di") {
+				std::string groups;
+				long value;
+
+				if (payload_parser.get_long(value)
+						&& payload_parser.get_string(groups)) {
+					lights_.dim_adjust(command == "dg" ? DimmerMode::GROUP
+						: DimmerMode::INDIVIDUAL, groups, value);
+				}
+			}
+		}
 	} else if (topic == "preset") {
 		std::string preset_name;
 

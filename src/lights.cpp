@@ -363,11 +363,21 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 		return;
 	}
 
+	if (dim_adjust(config_.get_dimmer(dimmer_id), level)) {
+		network_.publish(FixedConfig::mqttTopic("/dimmer/")
+				+ std::to_string(dimmer_id) + "/change", std::to_string(level));
+	}
+}
+
+void Lights::dim_adjust(DimmerMode mode, const std::string &groups, long level) {
+	dim_adjust(config_.make_dimmer(mode, groups), level);
+}
+
+bool Lights::dim_adjust(DimmerConfig &&dimmer_config, long level) {
 	if (level < -(long)MAX_LEVEL || level > (long)MAX_LEVEL) {
-		return;
+		return false;
 	}
 
-	const auto dimmer_config = config_.get_dimmer(dimmer_id);
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	uint64_t now = esp_timer_get_time();
@@ -474,15 +484,14 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 	if (changed) {
 		save_rtc_state();
 
-		network_.publish(FixedConfig::mqttTopic("/dimmer/")
-			+ std::to_string(dimmer_id) + "/change", std::to_string(level));
-
 		publish_levels(true);
 
 		if (dali_) {
 			dali_->wake_up();
 		}
 	}
+
+	return changed;
 }
 
 void Lights::request_group_sync() {

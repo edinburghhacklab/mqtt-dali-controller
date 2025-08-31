@@ -193,6 +193,7 @@ public:
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
 	DimmerConfig get_dimmer(unsigned int dimmer_id) const;
+	DimmerConfig make_dimmer(DimmerMode mode, const std::string &groups) const;
 
 	std::vector<std::string> get_dimmer_groups(unsigned int dimmer_id) const;
 	void set_dimmer_groups(unsigned int dimmer_id, const std::string &groups);
@@ -230,6 +231,7 @@ private:
 
 	void dirty_config();
 	bool set_addresses(const std::string &group, std::string addresses);
+	DimmerConfig make_dimmer(DimmerMode mode, const std::vector<std::string> &groups) const;
 	void publish_group_ids() const;
 	void publish_preset(const std::string &name, const std::array<Dali::level_fast_t,Dali::num_addresses> &levels) const;
 

@@ -1359,57 +1359,88 @@ DimmerConfig Config::get_dimmer(unsigned int dimmer_id) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (dimmer_id < NUM_DIMMERS) {
-		DimmerConfig dimmer_config{
-			.mode = current_.dimmers[dimmer_id].mode,
+		return make_dimmer(current_.dimmers[dimmer_id].mode,
+			current_.dimmers[dimmer_id].groups);
+	} else {
+		return {
+			.mode = DimmerMode::INDIVIDUAL,
 			.addresses{},
 			.groups{},
 			.address_group{},
 			.group_addresses{},
 			.all = false,
 		};
+	}
+}
 
-		dimmer_config.address_group.fill(Dali::GROUP_NONE);
+DimmerConfig Config::make_dimmer(DimmerMode mode, const std::string &groups) const {
+	std::istringstream input{groups};
+	std::string item;
+	std::vector<std::string> groups_vec;
 
-		for (const auto &group : current_.dimmers[dimmer_id].groups) {
-			if (group == BUILTIN_GROUP_ALL) {
-				dimmer_config.all = true;
-				dimmer_config.addresses = current_.lights;
+	while (std::getline(input, item, ',')) {
+		if (valid_group_name(item, true)) {
+			groups_vec.push_back(std::move(item));
+		}
+	}
 
-				if (dimmer_config.groups.any()) {
-					goto invalid;
-				}
-			} else if (dimmer_config.all) {
+	return make_dimmer(mode, groups_vec);
+}
+
+DimmerConfig Config::make_dimmer(DimmerMode mode,
+		const std::vector<std::string> &groups) const {
+	std::lock_guard lock{data_mutex_};
+
+	DimmerConfig dimmer_config{
+		.mode = mode,
+		.addresses{},
+		.groups{},
+		.address_group{},
+		.group_addresses{},
+		.all = false,
+	};
+
+	dimmer_config.address_group.fill(Dali::GROUP_NONE);
+
+	for (const auto &group : groups) {
+		if (group == BUILTIN_GROUP_ALL) {
+			dimmer_config.all = true;
+			dimmer_config.addresses = current_.lights;
+
+			if (dimmer_config.groups.any()) {
 				goto invalid;
-			} else {
-				auto it = current_.groups_by_name.find(group);
+			}
+		} else if (dimmer_config.all) {
+			goto invalid;
+		} else {
+			auto it = current_.groups_by_name.find(group);
 
-				if (it == current_.groups_by_name.end()) {
-					continue;
-				}
+			if (it == current_.groups_by_name.end()) {
+				continue;
+			}
 
-				if (it->second.id >= dimmer_config.groups.size()) {
-					continue;
-				}
+			if (it->second.id >= dimmer_config.groups.size()) {
+				continue;
+			}
 
-				dimmer_config.groups[it->second.id] = true;
+			dimmer_config.groups[it->second.id] = true;
 
-				for (unsigned int address = 0;
-						address < dimmer_config.address_group.size(); address++) {
-					if (current_.lights[address] && it->second.addresses[address]) {
-						if (dimmer_config.address_group[address] != Dali::GROUP_NONE) {
-							goto invalid;
-						}
-
-						dimmer_config.addresses[address] = true;
-						dimmer_config.group_addresses[it->second.id][address] = true;
-						dimmer_config.address_group[address] = it->second.id;
+			for (unsigned int address = 0;
+					address < dimmer_config.address_group.size(); address++) {
+				if (current_.lights[address] && it->second.addresses[address]) {
+					if (dimmer_config.address_group[address] != Dali::GROUP_NONE) {
+						goto invalid;
 					}
+
+					dimmer_config.addresses[address] = true;
+					dimmer_config.group_addresses[it->second.id][address] = true;
+					dimmer_config.address_group[address] = it->second.id;
 				}
 			}
 		}
-
-		return dimmer_config;
 	}
+
+	return dimmer_config;
 
 invalid:
 	return {

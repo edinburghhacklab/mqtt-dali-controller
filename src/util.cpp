@@ -30,7 +30,7 @@ bool long_from_string(const std::string &text, long &value) {
 	char *endptr = nullptr;
 
 	errno = 0;
-	value = std::strtol(text.c_str(), &endptr, 10);
+	value = std::strtol(text.c_str() + (text[0] == '+' ? 1 : 0), &endptr, 10);
 	if (!endptr || endptr[0] || errno) {
 		return false;
 	}
@@ -46,7 +46,7 @@ bool ulong_from_string(const std::string &text, unsigned long &value) {
 	char *endptr = nullptr;
 
 	errno = 0;
-	value = std::strtoul(text.c_str(), &endptr, 10);
+	value = std::strtoul(text.c_str() + (text[0] == '+' ? 1 : 0), &endptr, 10);
 	if (!endptr || endptr[0] || errno) {
 		return false;
 	}
@@ -62,7 +62,7 @@ bool ulonglong_from_string(const std::string &text, unsigned long long &value) {
 	char *endptr = nullptr;
 
 	errno = 0;
-	value = std::strtoull(text.c_str(), &endptr, 10);
+	value = std::strtoull(text.c_str() + (text[0] == '+' ? 1 : 0), &endptr, 10);
 	if (!endptr || endptr[0] || errno) {
 		return false;
 	}

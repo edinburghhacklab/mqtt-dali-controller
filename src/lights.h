@@ -24,13 +24,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "config.h"
 #include "dali.h"
 #include "util.h"
 
 static const std::string RESERVED_PRESET_CUSTOM = "custom";
 static const std::string RESERVED_PRESET_UNKNOWN = "unknown";
 
-class Config;
 class Network;
 
 struct LightsState {
@@ -68,6 +68,7 @@ public:
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const Dali::addresses_t &lights, bool on);
 	void dim_adjust(unsigned int dimmer_id, long level);
+	void dim_adjust(DimmerMode mode, const std::string &groups, long level);
 
 	void request_group_sync();
 	void request_group_sync(const std::string &group);
@@ -94,6 +95,7 @@ private:
 
 	static uint32_t rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels);
 
+	bool dim_adjust(DimmerConfig &&dimmer_config, long level);
 	void publish_active_presets();
 	void publish_levels(bool force);
 	void clear_group_levels(const Dali::addresses_t &lights);
