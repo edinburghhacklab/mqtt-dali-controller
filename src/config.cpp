@@ -1581,11 +1581,11 @@ std::vector<std::string> Config::get_button_groups(unsigned int button_id) const
 	}
 }
 
-Dali::addresses_t Config::button_lights(unsigned int button_id) const {
+std::vector<std::string> Config::button_active_groups(unsigned int button_id) const {
 	std::lock_guard lock{data_mutex_};
 
 	if (button_id < NUM_BUTTONS) {
-		return parse_groups(selector_group(current_.buttons[button_id].groups));
+		return selector_group(current_.buttons[button_id].groups);
 	} else {
 		return {};
 	}

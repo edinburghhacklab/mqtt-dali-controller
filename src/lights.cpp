@@ -201,8 +201,10 @@ void Lights::select_preset(std::string name, const std::string &light_ids,
 	select_preset(name, lights, idle_only, internal);
 }
 
-void Lights::select_preset(std::string name, Dali::addresses_t lights,
-		bool internal) {
+void Lights::select_preset(std::string name,
+		const std::vector<std::string> &groups, bool internal) {
+	const auto lights = config_.parse_groups(groups);
+
 	select_preset(name, lights, false, internal);
 }
 

@@ -217,7 +217,7 @@ public:
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
 
 	std::vector<std::string> get_button_groups(unsigned int button_id) const;
-	Dali::addresses_t button_lights(unsigned int button_id) const;
+	std::vector<std::string> button_active_groups(unsigned int button_id) const;
 	void set_button_groups(unsigned int button_id, const std::string &groups);
 
 	std::string get_button_preset(unsigned int button_id) const;
@@ -250,6 +250,7 @@ public:
 	void delete_preset(const std::string &name);
 
 	Dali::addresses_t parse_light_ids(const std::string &light_ids, bool &idle_only) const;
+	Dali::addresses_t parse_groups(const std::vector<std::string> &groups) const;
 	std::string lights_text(const Dali::addresses_t &lights) const;
 
 private:
@@ -265,7 +266,6 @@ private:
 
 	void dirty_config();
 	bool set_addresses(const std::string &group, std::string addresses);
-	Dali::addresses_t parse_groups(const std::vector<std::string> &groups) const;
 	DimmerConfig make_dimmer(DimmerMode mode, const std::vector<std::string> &groups) const;
 	const std::vector<std::string>& selector_group(const std::vector<std::string> &groups) const;
 	void publish_group_ids() const;

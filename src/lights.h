@@ -66,7 +66,7 @@ public:
 	LightsState get_state() const;
 	void completed_force_refresh(unsigned int light_id) const;
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
-	void select_preset(std::string name, Dali::addresses_t lights, bool internal = false);
+	void select_preset(std::string name, const std::vector<std::string> &groups, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const Dali::addresses_t &lights, bool on);
 	void dim_adjust(unsigned int dimmer_id, long level);

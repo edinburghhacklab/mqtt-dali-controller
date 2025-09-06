@@ -69,16 +69,17 @@ unsigned long Buttons::run_tasks() {
 }
 
 unsigned long Buttons::run_button(unsigned int button_id) {
-	auto lights = config_.button_lights(button_id);
-	auto preset = config_.get_button_preset(button_id);
 	DebounceResult debounce = debounce_[button_id].run();
 
 	if (debounce.changed && !debounce_[button_id].first()
 			&& debounce_[button_id].value()) {
+		auto groups = config_.button_active_groups(button_id);
+		auto preset = config_.get_button_preset(button_id);
+
 		ESP_LOGE(TAG, "Button %u pressed", button_id);
 
-		if (lights.any() && !preset.empty()) {
-		 	lights_.select_preset(preset, lights, false);
+		if (!groups.empty() && !preset.empty()) {
+			lights_.select_preset(preset, groups, false);
 		}
 	}
 
