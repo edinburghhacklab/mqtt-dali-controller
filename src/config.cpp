@@ -1246,6 +1246,14 @@ void Config::publish_config() const {
 		network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
 	}
 
+	for (unsigned int i = 0; i < NUM_BUTTONS; i++) {
+		auto button_prefix = FixedConfig::mqttTopic("/button/") + std::to_string(i);
+
+		network_.publish(button_prefix + "/groups",
+				vector_text(current_.buttons[i].groups), true);
+		network_.publish(button_prefix + "/preset", current_.buttons[i].preset, true);
+	}
+
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
 		auto dimmer_prefix = FixedConfig::mqttTopic("/dimmer/") + std::to_string(i);
 
@@ -1257,6 +1265,13 @@ void Config::publish_config() const {
 			std::to_string(current_.dimmers[i].level_steps), true);
 		network_.publish(dimmer_prefix + "/mode",
 			Dimmers::mode_text(current_.dimmers[i].mode), true);
+	}
+
+	for (unsigned int i = 0; i < NUM_OPTIONS; i++) {
+		auto selector_prefix = FixedConfig::mqttTopic("/selector/") + std::to_string(i);
+
+		network_.publish(selector_prefix + "/groups",
+				vector_text(current_.selector_groups[i]), true);
 	}
 
 	for (const auto &preset : current_.presets) {
