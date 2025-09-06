@@ -44,6 +44,7 @@
 #include "dimmers.h"
 #include "lights.h"
 #include "network.h"
+#include "selector.h"
 #include "switches.h"
 #include "util.h"
 
@@ -106,8 +107,9 @@ static void writeText(cbor::Writer &writer, const std::string &value) {
 	writer.writeBytes(reinterpret_cast<const uint8_t*>(value.c_str()), length);
 }
 
-Config::Config(std::mutex &file_mutex, Network &network)
-	: network_(network), file_mutex_(file_mutex), file_(network) {
+Config::Config(std::mutex &file_mutex, Network &network,
+	const Selector &selector) : network_(network), selector_(selector),
+	file_mutex_(file_mutex), file_(network) {
 }
 
 ConfigFile::ConfigFile(Network &network) : network_(network) {
@@ -361,6 +363,10 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			}
 		} else if (key == "dimmers") {
 			if (!read_config_dimmers(reader)) {
+				return false;
+			}
+		} else if (key == "selector") {
+			if (!read_config_selectors(reader)) {
 				return false;
 			}
 		} else if (key == "presets") {
@@ -715,6 +721,89 @@ bool ConfigFile::read_config_dimmer_groups(cbor::Reader &reader, unsigned int di
 	return true;
 }
 
+bool ConfigFile::read_config_selectors(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (i < NUM_OPTIONS) {
+			if (!read_config_selector(reader, i)) {
+				return false;
+			}
+
+			i++;
+		} else {
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_selector(cbor::Reader &reader, unsigned int option_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "groups") {
+			if (!read_config_selector_groups(reader, option_id)) {
+				return false;
+			}
+		} else {
+			CFG_LOG(TAG, "Unknown selector option %u key: %s", option_id, key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_selector_groups(cbor::Reader &reader, unsigned int option_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string group;
+
+		if (!readText(reader, group, UINT8_MAX)) {
+			return false;
+		}
+
+		if (group.empty() || Config::valid_group_name(group, true)) {
+			CFG_LOG(TAG, "Selector option %u group += %s", option_id, group.c_str());
+			data_.selector_groups[option_id].push_back(std::move(group));
+		} else {
+			CFG_LOG(TAG, "Selector option %u invalid group ignored: %s", option_id, group.c_str());
+		}
+	}
+
+	return true;
+}
+
 bool ConfigFile::read_config_presets(cbor::Reader &reader) {
 	uint64_t length;
 	bool indefinite;
@@ -921,7 +1010,7 @@ bool ConfigFile::write_config(const std::string &filename) const {
 }
 
 void ConfigFile::write_config(cbor::Writer &writer) const {
-	writer.beginMap(6);
+	writer.beginMap(7);
 
 	writeText(writer, "lights");
 	writer.beginArray(data_.lights.size());
@@ -981,6 +1070,18 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 
 		writeText(writer, "mode");
 		writeText(writer, Dimmers::mode_text(data_.dimmers[i].mode));
+	}
+
+	writeText(writer, "selector");
+	writer.beginArray(NUM_OPTIONS);
+	for (unsigned int i = 0; i < NUM_OPTIONS; i++) {
+		writer.beginMap(1);
+
+		writeText(writer, "groups");
+		writer.beginArray(data_.selector_groups[i].size());
+		for (const auto &group : data_.selector_groups[i]) {
+			writeText(writer, group);
+		}
 	}
 
 	writeText(writer, "presets");
@@ -1360,7 +1461,7 @@ DimmerConfig Config::get_dimmer(unsigned int dimmer_id) const {
 
 	if (dimmer_id < NUM_DIMMERS) {
 		return make_dimmer(current_.dimmers[dimmer_id].mode,
-			current_.dimmers[dimmer_id].groups);
+			selector_group(current_.dimmers[dimmer_id].groups));
 	} else {
 		return {
 			.mode = DimmerMode::INDIVIDUAL,
@@ -1451,6 +1552,23 @@ invalid:
 		.group_addresses{},
 		.all = false,
 	};
+}
+
+const std::vector<std::string>& Config::selector_group(
+		const std::vector<std::string> &groups) const {
+	static const std::vector<std::string> empty;
+
+	if (!groups.empty()) {
+		return groups;
+	}
+
+	int option_id = selector_.read();
+
+	if (option_id < NUM_OPTIONS) {
+		return current_.selector_groups[option_id];
+	}
+
+	return empty;
 }
 
 std::vector<std::string> Config::get_dimmer_groups(unsigned int dimmer_id) const {
@@ -1581,6 +1699,47 @@ void Config::set_dimmer_mode(unsigned int dimmer_id, const std::string &mode) {
 			dirty_config();
 		}
 	}
+}
+
+std::vector<std::string> Config::get_selector_groups(unsigned int option_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (option_id < NUM_OPTIONS) {
+		return current_.selector_groups[option_id];
+	} else {
+		return {};
+	}
+}
+
+void Config::set_selector_groups(unsigned int option_id, const std::string &groups) {
+	if (option_id >= NUM_OPTIONS) {
+		return;
+	}
+
+	std::lock_guard lock{data_mutex_};
+	std::istringstream input{groups};
+	std::string item;
+	std::vector<std::string> new_groups;
+
+	auto before = vector_text(current_.selector_groups[option_id]);
+
+	while (std::getline(input, item, ',')) {
+		if (valid_group_name(item, true)) {
+			new_groups.push_back(std::move(item));
+		}
+	}
+
+	current_.selector_groups[option_id] = std::move(new_groups);
+
+	auto after = vector_text(current_.selector_groups[option_id]);
+
+	if (before != after) {
+		network_.report(TAG, std::string{"Selector option "}
+			+ std::to_string(option_id) + " groups: "
+			+ quoted_string(before) + " -> " + quoted_string(after));
+	}
+
+	dirty_config();
 }
 
 std::vector<std::string> Config::preset_names() const {

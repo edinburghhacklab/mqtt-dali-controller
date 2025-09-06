@@ -31,6 +31,7 @@
 
 #include "dali.h"
 #include "dimmers.h"
+#include "selector.h"
 #include "switches.h"
 
 static const std::string BUILTIN_GROUP_ALL = "all";
@@ -88,8 +89,9 @@ struct ConfigGroupData {
 
 struct ConfigData {
 	Dali::addresses_t lights;
-	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
 	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
+	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
+	std::array<std::vector<std::string>,NUM_OPTIONS> selector_groups;
 	std::unordered_map<std::string,ConfigGroupData> groups_by_name;
 	std::array<Dali::addresses_t,Dali::num_groups> groups_by_id;
 	std::unordered_map<std::string,std::array<Dali::level_fast_t,Dali::num_addresses>> presets;
@@ -101,6 +103,7 @@ struct ConfigData {
 		return this->lights == other.lights
 			&& this->dimmers == other.dimmers
 			&& this->switches == other.switches
+			&& this->selector_groups == other.selector_groups
 			&& this->groups_by_name == other.groups_by_name
 			&& this->groups_by_id == other.groups_by_id
 			&& this->presets == other.presets
@@ -130,6 +133,9 @@ private:
 	bool read_config_dimmers(cbor::Reader &reader);
 	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_dimmer_groups(cbor::Reader &reader, unsigned int dimmer_id);
+	bool read_config_selectors(cbor::Reader &reader);
+	bool read_config_selector(cbor::Reader &reader, unsigned int option_id);
+	bool read_config_selector_groups(cbor::Reader &reader, unsigned int option_id);
 	bool read_config_presets(cbor::Reader &reader);
 	bool read_config_preset(cbor::Reader &reader);
 	bool read_config_preset_levels(cbor::Reader &reader, std::array<Dali::level_fast_t,Dali::num_addresses> &levels);
@@ -156,7 +162,7 @@ public:
 	static constexpr int64_t LEVEL_NO_CHANGE = -1;
 	static constexpr size_t MAX_GROUPS = 16;
 
-	explicit Config(std::mutex &file_mutex, Network &network);
+	explicit Config(std::mutex &file_mutex, Network &network, const Selector &selector);
 
 	static bool valid_group_name(const std::string &name, bool use = false);
 	static bool valid_preset_name(const std::string &name, bool use = false);
@@ -207,6 +213,9 @@ public:
 	DimmerMode get_dimmer_mode(unsigned int dimmer_id) const;
 	void set_dimmer_mode(unsigned int dimmer_id, const std::string &mode);
 
+	std::vector<std::string> get_selector_groups(unsigned int option_id) const;
+	void set_selector_groups(unsigned int option_id, const std::string &groups);
+
 	std::vector<std::string> preset_names() const;
 	bool get_preset(const std::string &name, std::array<Dali::level_fast_t,Dali::num_addresses> &levels) const;
 	bool get_ordered_preset(unsigned long long idx, std::string &name) const;
@@ -232,10 +241,12 @@ private:
 	void dirty_config();
 	bool set_addresses(const std::string &group, std::string addresses);
 	DimmerConfig make_dimmer(DimmerMode mode, const std::vector<std::string> &groups) const;
+	const std::vector<std::string>& selector_group(const std::vector<std::string> &groups) const;
 	void publish_group_ids() const;
 	void publish_preset(const std::string &name, const std::array<Dali::level_fast_t,Dali::num_addresses> &levels) const;
 
 	Network &network_;
+	const Selector &selector_;
 
 	std::mutex &file_mutex_;
 	ConfigFile file_;

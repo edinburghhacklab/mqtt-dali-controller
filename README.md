@@ -18,6 +18,8 @@ the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
 The light switches are GPIOs 11, 12, 13 and 14 (active low).
 
+The selector option GPIOs are 16 and 17 (active low).
+
 Rotary encoders for dimming are on the following GPIOs (active low):
 * A0 and A1 (1 and 2)
 * A2 and A3 (3 and 4)
@@ -122,7 +124,8 @@ set to `off`.
 ### Dimmers
 
 Configure which light dimmers are present by setting the groups associated with
-the dimmer and configuring the encoder/level steps:
+the dimmer (optional, see [selector](#selector) below) and configuring the
+encoder/level steps:
 ```
 dali/dimmer/<0-1>/groups <name>,... (retain)
 dali/dimmer/<0-1>/encoder_steps <steps> (retain)
@@ -144,6 +147,17 @@ ignored; each group will be dimmed independently.
 Synchronise the DALI groups before dimming otherwise unexpected behaviour will
 happen, particularly if the previously stored groups overlap on the same dimmer
 and that can no longer be identified.
+
+### Selector
+
+The "selector" lets you choose from one of 4 group options by switching 2 GPIOs.
+
+Configure the groups associated with each selector option:
+```
+dali/selector/<0-3>/groups <name>,... (retain)
+```
+
+These groups are used by default if a dimmer has no groups configured.
 
 ### Presets
 

@@ -45,7 +45,8 @@ std::string FixedConfig::mqtt_topic_str{FixedConfig::MQTT_TOPIC};
 static std::mutex file_mutex;
 
 static Network network;
-static Config config{file_mutex, network};
+static Selector selector;
+static Config config{file_mutex, network, selector};
 static Lights lights{network, config};
 static UI ui{file_mutex, network, lights};
 static API *api{nullptr};
@@ -91,6 +92,7 @@ void setup() {
 	api = new API{file_mutex, network, config, dali, dimmers, lights, ui};
 
 	dali.setup();
+	selector.setup();
 	config.setup();
 	lights.setup();
 	switches.setup();

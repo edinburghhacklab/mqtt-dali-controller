@@ -21,7 +21,6 @@
 #include <Arduino.h>
 #include <driver/gpio.h>
 #include <esp_log.h>
-#include <hal/rtc_cntl_ll.h>
 
 #include <algorithm>
 #include <atomic>
