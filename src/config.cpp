@@ -361,6 +361,10 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			if (!read_config_switches(reader)) {
 				return false;
 			}
+		} else if (key == "buttons") {
+			if (!read_config_buttons(reader)) {
+				return false;
+			}
 		} else if (key == "dimmers") {
 			if (!read_config_dimmers(reader)) {
 				return false;
@@ -582,6 +586,102 @@ bool ConfigFile::read_config_switch(cbor::Reader &reader, unsigned int switch_id
 			if (!reader.isWellFormed()) {
 				return false;
 			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_buttons(cbor::Reader &reader) {
+	uint64_t length;
+	bool indefinite;
+	unsigned int i = 0;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		if (i < NUM_BUTTONS) {
+			if (!read_config_button(reader, i)) {
+				return false;
+			}
+
+			i++;
+		} else {
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_button(cbor::Reader &reader, unsigned int button_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectMap(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string key;
+
+		if (!readText(reader, key, UINT8_MAX)) {
+			return false;
+		}
+
+		if (key == "groups") {
+			if (!read_config_button_groups(reader, button_id)) {
+				return false;
+			}
+		} else if (key == "preset") {
+			std::string preset;
+
+			if (!readText(reader, preset, UINT8_MAX)) {
+				return false;
+			}
+
+			if (preset.empty() || Config::valid_preset_name(preset, true)) {
+				CFG_LOG(TAG, "Button %u preset = %s", button_id, preset.c_str());
+				data_.buttons[button_id].preset = std::move(preset);
+			} else {
+				CFG_LOG(TAG, "Button %u invalid preset ignored: %s", button_id, preset.c_str());
+			}
+		} else {
+			CFG_LOG(TAG, "Unknown button %u key: %s", button_id, key.c_str());
+
+			if (!reader.isWellFormed()) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ConfigFile::read_config_button_groups(cbor::Reader &reader, unsigned int button_id) {
+	uint64_t length;
+	bool indefinite;
+
+	if (!cbor::expectArray(reader, &length, &indefinite) || indefinite) {
+		return false;
+	}
+
+	while (length-- > 0) {
+		std::string group;
+
+		if (!readText(reader, group, UINT8_MAX)) {
+			return false;
+		}
+
+		if (group.empty() || Config::valid_group_name(group, true)) {
+			CFG_LOG(TAG, "Button %u group += %s", button_id, group.c_str());
+			data_.buttons[button_id].groups.push_back(std::move(group));
+		} else {
+			CFG_LOG(TAG, "Button %u invalid group ignored: %s", button_id, group.c_str());
 		}
 	}
 
@@ -1010,7 +1110,7 @@ bool ConfigFile::write_config(const std::string &filename) const {
 }
 
 void ConfigFile::write_config(cbor::Writer &writer) const {
-	writer.beginMap(7);
+	writer.beginMap(8);
 
 	writeText(writer, "lights");
 	writer.beginArray(data_.lights.size());
@@ -1049,6 +1149,21 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 
 		writeText(writer, "preset");
 		writeText(writer, data_.switches[i].preset);
+	}
+
+	writeText(writer, "buttons");
+	writer.beginArray(NUM_BUTTONS);
+	for (unsigned int i = 0; i < NUM_BUTTONS; i++) {
+		writer.beginMap(2);
+
+		writeText(writer, "groups");
+		writer.beginArray(data_.buttons[i].groups.size());
+		for (const auto &group : data_.buttons[i].groups) {
+			writeText(writer, group);
+		}
+
+		writeText(writer, "preset");
+		writeText(writer, data_.buttons[i].preset);
 	}
 
 	writeText(writer, "dimmers");
@@ -1451,6 +1566,87 @@ void Config::set_switch_preset(unsigned int switch_id, const std::string &preset
 				+ " -> " + quoted_string(preset));
 
 			current_.switches[switch_id].preset = preset;
+			dirty_config();
+		}
+	}
+}
+
+std::vector<std::string> Config::get_button_groups(unsigned int button_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (button_id < NUM_BUTTONS) {
+		return current_.buttons[button_id].groups;
+	} else {
+		return {};
+	}
+}
+
+Dali::addresses_t Config::button_lights(unsigned int button_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (button_id < NUM_BUTTONS) {
+		return parse_groups(selector_group(current_.buttons[button_id].groups));
+	} else {
+		return {};
+	}
+}
+
+void Config::set_button_groups(unsigned int button_id, const std::string &groups) {
+	if (button_id >= NUM_BUTTONS) {
+		return;
+	}
+
+	std::lock_guard lock{data_mutex_};
+	std::istringstream input{groups};
+	std::string item;
+	std::vector<std::string> new_groups;
+
+	auto before = vector_text(current_.buttons[button_id].groups);
+
+	while (std::getline(input, item, ',')) {
+		if (valid_group_name(item, true)) {
+			new_groups.push_back(std::move(item));
+		}
+	}
+
+	current_.buttons[button_id].groups = std::move(new_groups);
+
+	auto after = vector_text(current_.buttons[button_id].groups);
+
+	if (before != after) {
+		network_.report(TAG, std::string{"Button "}
+			+ std::to_string(button_id) + " groups: "
+			+ quoted_string(before) + " -> " + quoted_string(after));
+	}
+
+	dirty_config();
+}
+
+std::string Config::get_button_preset(unsigned int button_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (button_id < NUM_BUTTONS) {
+		return current_.buttons[button_id].preset;
+	} else {
+		return "";
+	}
+}
+
+void Config::set_button_preset(unsigned int button_id, const std::string &preset) {
+	std::lock_guard lock{data_mutex_};
+
+	if (button_id < NUM_BUTTONS) {
+		if (!preset.empty() && !valid_preset_name(preset, true)) {
+			return;
+		}
+
+		if (current_.buttons[button_id].preset != preset) {
+			network_.report(TAG, std::string{"Button "}
+				+ std::to_string(button_id) + " preset: "
+				+ quoted_string(current_.buttons[button_id].preset)
+				+ " -> " + quoted_string(preset));
+
+			current_.buttons[button_id].preset = preset;
 			dirty_config();
 		}
 	}
@@ -1971,8 +2167,8 @@ Dali::addresses_t Config::parse_light_ids(const std::string &light_ids,
 		unsigned long begin, end;
 
 		if (item == BUILTIN_GROUP_ALL) {
-			begin = 0;
-			end = Dali::num_addresses - 1;
+			lights.set();
+			continue;
 		} else if (item == BUILTIN_GROUP_IDLE) {
 			idle_only = true;
 			continue;
@@ -2018,6 +2214,27 @@ Dali::addresses_t Config::parse_light_ids(const std::string &light_ids,
 
 		for (unsigned long i = begin; i <= end; i++) {
 			lights[i] = true;
+		}
+	}
+
+	return lights;
+}
+
+Dali::addresses_t Config::parse_groups(const std::vector<std::string> &groups) const {
+	std::lock_guard lock{data_mutex_};
+	Dali::addresses_t lights;
+
+	for (const auto &item : groups) {
+		auto group = current_.groups_by_name.find(item);
+
+		if (item == BUILTIN_GROUP_ALL) {
+			lights.set();
+		} else if (group != current_.groups_by_name.end()) {
+			for (unsigned int i = 0; i < group->second.addresses.size(); i++) {
+				if (group->second.addresses[i]) {
+					lights[i] = true;
+				}
+			}
 		}
 	}
 

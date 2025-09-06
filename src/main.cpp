@@ -87,6 +87,7 @@ void setup() {
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_LEVEL1));
 
 	Switches &switches = *new Switches{network, config, lights};
+	Buttons &buttons = *new Buttons{config, lights};
 	Dimmers &dimmers = *new Dimmers{network, config, lights};
 	Dali &dali = *new Dali{config, lights};
 	api = new API{file_mutex, network, config, dali, dimmers, lights, ui};
@@ -96,6 +97,7 @@ void setup() {
 	config.setup();
 	lights.setup();
 	switches.setup();
+	buttons.setup();
 	dimmers.setup();
 	dali.start();
 	ui.setup();

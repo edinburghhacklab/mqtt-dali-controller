@@ -29,6 +29,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "buttons.h"
 #include "dali.h"
 #include "dimmers.h"
 #include "selector.h"
@@ -57,6 +58,18 @@ struct ConfigSwitchData {
 	}
 
 	inline bool operator!=(const ConfigSwitchData &other) const { return !(*this == other); }
+};
+
+struct ConfigButtonData {
+	std::vector<std::string> groups;
+	std::string preset;
+
+	bool operator==(const ConfigButtonData &other) const {
+		return this->groups == other.groups
+			&& this->preset == other.preset;
+	}
+
+	inline bool operator!=(const ConfigButtonData &other) const { return !(*this == other); }
 };
 
 struct ConfigDimmerData {
@@ -91,6 +104,7 @@ struct ConfigData {
 	Dali::addresses_t lights;
 	std::array<ConfigDimmerData,NUM_DIMMERS> dimmers;
 	std::array<ConfigSwitchData,NUM_SWITCHES> switches;
+	std::array<ConfigButtonData,NUM_BUTTONS> buttons;
 	std::array<std::vector<std::string>,NUM_OPTIONS> selector_groups;
 	std::unordered_map<std::string,ConfigGroupData> groups_by_name;
 	std::array<Dali::addresses_t,Dali::num_groups> groups_by_id;
@@ -103,6 +117,7 @@ struct ConfigData {
 		return this->lights == other.lights
 			&& this->dimmers == other.dimmers
 			&& this->switches == other.switches
+			&& this->buttons == other.buttons
 			&& this->selector_groups == other.selector_groups
 			&& this->groups_by_name == other.groups_by_name
 			&& this->groups_by_id == other.groups_by_id
@@ -130,6 +145,9 @@ private:
 	bool read_config_group(cbor::Reader &reader);
 	bool read_config_switches(cbor::Reader &reader);
 	bool read_config_switch(cbor::Reader &reader, unsigned int switch_id);
+	bool read_config_buttons(cbor::Reader &reader);
+	bool read_config_button(cbor::Reader &reader, unsigned int button_id);
+	bool read_config_button_groups(cbor::Reader &reader, unsigned int button_id);
 	bool read_config_dimmers(cbor::Reader &reader);
 	bool read_config_dimmer(cbor::Reader &reader, unsigned int dimmer_id);
 	bool read_config_dimmer_groups(cbor::Reader &reader, unsigned int dimmer_id);
@@ -193,10 +211,17 @@ public:
 	void set_switch_name(unsigned int switch_id, const std::string &name);
 
 	std::string get_switch_group(unsigned int switch_id) const;
-	void set_switch_group(unsigned int switch_id, const std::string &name);
+	void set_switch_group(unsigned int switch_id, const std::string &group);
 
 	std::string get_switch_preset(unsigned int switch_id) const;
 	void set_switch_preset(unsigned int switch_id, const std::string &preset);
+
+	std::vector<std::string> get_button_groups(unsigned int button_id) const;
+	Dali::addresses_t button_lights(unsigned int button_id) const;
+	void set_button_groups(unsigned int button_id, const std::string &groups);
+
+	std::string get_button_preset(unsigned int button_id) const;
+	void set_button_preset(unsigned int button_id, const std::string &preset);
 
 	DimmerConfig get_dimmer(unsigned int dimmer_id) const;
 	DimmerConfig make_dimmer(DimmerMode mode, const std::string &groups) const;
@@ -240,6 +265,7 @@ private:
 
 	void dirty_config();
 	bool set_addresses(const std::string &group, std::string addresses);
+	Dali::addresses_t parse_groups(const std::vector<std::string> &groups) const;
 	DimmerConfig make_dimmer(DimmerMode mode, const std::vector<std::string> &groups) const;
 	const std::vector<std::string>& selector_group(const std::vector<std::string> &groups) const;
 	void publish_group_ids() const;

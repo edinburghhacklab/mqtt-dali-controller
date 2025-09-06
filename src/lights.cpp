@@ -193,10 +193,22 @@ void Lights::save_rtc_state() {
 	rtc_crc_ = rtc_crc(levels);
 }
 
-void Lights::select_preset(std::string name, const std::string &light_ids, bool internal) {
-	const auto addresses = config_.get_addresses();
+void Lights::select_preset(std::string name, const std::string &light_ids,
+		bool internal) {
 	bool idle_only;
 	const auto lights = config_.parse_light_ids(light_ids, idle_only);
+
+	select_preset(name, lights, idle_only, internal);
+}
+
+void Lights::select_preset(std::string name, Dali::addresses_t lights,
+		bool internal) {
+	select_preset(name, lights, false, internal);
+}
+
+void Lights::select_preset(std::string name, Dali::addresses_t lights,
+		bool idle_only, bool internal) {
+	const auto addresses = config_.get_addresses();
 	std::lock_guard publish_lock{publish_mutex_};
 	std::lock_guard lights_lock{lights_mutex_};
 	std::array<Dali::level_fast_t,Dali::num_addresses> preset_levels;

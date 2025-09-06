@@ -92,6 +92,8 @@ void API::connected() {
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/group"));
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/name"));
 	network_.subscribe(FixedConfig::mqttTopic("/switch/+/preset"));
+	network_.subscribe(FixedConfig::mqttTopic("/button/+/groups"));
+	network_.subscribe(FixedConfig::mqttTopic("/button/+/preset"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/groups"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/encoder_steps"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/level_steps"));
@@ -237,6 +239,17 @@ void API::receive(std::string &&topic, std::string &&payload) {
 				config_.set_switch_name(switch_id, payload);
 			} else if (topic == "preset") {
 				config_.set_switch_preset(switch_id, payload);
+			}
+		}
+	} else if (topic == "button") {
+		long button_id;
+
+		if (topic_parser.get_long(button_id)
+				&& topic_parser.get_string(topic)) {
+			if (topic == "groups") {
+				config_.set_button_groups(button_id, payload);
+			} else if (topic == "preset") {
+				config_.set_button_preset(button_id, payload);
 			}
 		}
 	} else if (topic == "dimmer") {

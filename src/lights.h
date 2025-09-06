@@ -23,6 +23,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "config.h"
 #include "dali.h"
@@ -65,6 +66,7 @@ public:
 	LightsState get_state() const;
 	void completed_force_refresh(unsigned int light_id) const;
 	void select_preset(std::string name, const std::string &light_ids, bool internal = false);
+	void select_preset(std::string name, Dali::addresses_t lights, bool internal = false);
 	void set_level(const std::string &light_ids, long level);
 	void set_power(const Dali::addresses_t &lights, bool on);
 	void dim_adjust(unsigned int dimmer_id, long level);
@@ -95,6 +97,8 @@ private:
 
 	static uint32_t rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels);
 
+	void select_preset(std::string name, Dali::addresses_t lights,
+		bool idle_only, bool internal);
 	bool dim_adjust(DimmerConfig &&dimmer_config, long level);
 	void publish_active_presets();
 	void publish_levels(bool force);

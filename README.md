@@ -121,6 +121,15 @@ configured) will be applied. This ensures that the lights function as expected
 when they're turned on even if their light levels have previously been dimmed or
 set to `off`.
 
+### Buttons
+
+Configure which buttons are present by setting the groups associated with the
+button (optional, see [selector](#selector) below) and configuring the preset:
+```
+dali/button/<0-3>/groups <name>,... (retain)
+dali/button/<0-3>/preset <name> (retain)
+```
+
 ### Dimmers
 
 Configure which light dimmers are present by setting the groups associated with
@@ -157,7 +166,7 @@ Configure the groups associated with each selector option:
 dali/selector/<0-3>/groups <name>,... (retain)
 ```
 
-These groups are used by default if a dimmer has no groups configured.
+These groups are used by default if a button or dimmer has no groups configured.
 
 ### Presets
 
