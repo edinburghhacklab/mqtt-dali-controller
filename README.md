@@ -16,14 +16,11 @@ Control DALI lights using an ESP32-S3 over MQTT.
 The DALI interface is on GPIO 40 (RX) and 21 (TX). This is active high which is
 the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
-The light switches are GPIOs 11, 12, 13, 14 and 16 (active low).
+The light switches are GPIOs 11, 12, 13 and 14 (active low).
 
 Rotary encoders for dimming are on the following GPIOs (active low):
 * A0 and A1 (1 and 2)
 * A2 and A3 (3 and 4)
-* A4 and A5 (5 and 6)
-* A6 and A7 (7 and 8)
-* A8 and A9 (9 and 10)
 
 * [PCB](https://github.com/edinburghhacklab/dali-pcb)
 
@@ -107,14 +104,14 @@ dali/groups/ids kitchen,,table,,,door,,,,,,,,,,
 Configure which light switches are present by setting the group associated with
 the switch and configuring the default preset:
 ```
-dali/switch/<0-4>/name [name] (retain)
-dali/switch/<0-4>/group <name> (retain)
-dali/switch/<0-4>/preset <name> (retain)
+dali/switch/<0-3>/name [name] (retain)
+dali/switch/<0-3>/group <name> (retain)
+dali/switch/<0-3>/preset <name> (retain)
 ```
 
 Light switch status is reported when it changes and then every 60 seconds:
 ```
-dali/switch/<0-4>/state <0-1> (retain)
+dali/switch/<0-3>/state <0-1> (retain)
 ```
 
 Whenever the light switch is turned on or off, the default preset (if
@@ -127,10 +124,10 @@ set to `off`.
 Configure which light dimmers are present by setting the groups associated with
 the dimmer and configuring the encoder/level steps:
 ```
-dali/dimmer/<0-4>/groups <name>,... (retain)
-dali/dimmer/<0-4>/encoder_steps <steps> (retain)
-dali/dimmer/<0-4>/level_steps <0-254> (retain)
-dali/dimmer/<0-4>/mode <individual|group> (retain)
+dali/dimmer/<0-1>/groups <name>,... (retain)
+dali/dimmer/<0-1>/encoder_steps <steps> (retain)
+dali/dimmer/<0-1>/level_steps <0-254> (retain)
+dali/dimmer/<0-1>/mode <individual|group> (retain)
 ```
 
 Encoder steps can be configured in the range 1 to 127 (for forward movement) or

@@ -27,7 +27,7 @@
 #include "thread.h"
 #include "util.h"
 
-static constexpr unsigned int NUM_DIMMERS = 5;
+static constexpr unsigned int NUM_DIMMERS = 2;
 static constexpr int MIN_ENCODER_STEPS = -127;
 static constexpr int MAX_ENCODER_STEPS = 127;
 

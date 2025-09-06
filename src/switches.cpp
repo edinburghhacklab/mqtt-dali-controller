@@ -37,7 +37,6 @@ static constexpr std::array<gpio_num_t,NUM_SWITCHES> SWITCH_GPIO{{
 	(gpio_num_t)12,
 	(gpio_num_t)13,
 	(gpio_num_t)14,
-	(gpio_num_t)16,
 }};
 
 RTC_NOINIT_ATTR uint32_t Switches::rtc_states_[NUM_SWITCHES];
@@ -50,7 +49,6 @@ Switches::Switches(Network &network, const Config &config, Lights &lights)
 			Debounce{SWITCH_GPIO[1], true, DEBOUNCE_US},
 			Debounce{SWITCH_GPIO[2], true, DEBOUNCE_US},
 			Debounce{SWITCH_GPIO[3], true, DEBOUNCE_US},
-			Debounce{SWITCH_GPIO[4], true, DEBOUNCE_US},
 		}) {
 }
 
