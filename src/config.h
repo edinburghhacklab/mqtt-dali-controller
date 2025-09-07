@@ -224,6 +224,7 @@ public:
 	void set_button_preset(unsigned int button_id, const std::string &preset);
 
 	DimmerConfig get_dimmer(unsigned int dimmer_id) const;
+	std::vector<std::string> dimmer_active_groups(unsigned int dimmer_id) const;
 	DimmerConfig make_dimmer(DimmerMode mode, const std::string &groups) const;
 
 	std::vector<std::string> get_dimmer_groups(unsigned int dimmer_id) const;

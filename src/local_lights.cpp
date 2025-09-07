@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lights.h"
+#include "local_lights.h"
 
 #include <Arduino.h>
 #include <esp_crc.h>
@@ -33,15 +33,14 @@
 #include "config.h"
 #include "dali.h"
 #include "dimmers.h"
+#include "lights.h"
 #include "network.h"
 #include "util.h"
 
-static_assert(NUM_DIMMERS <= Dali::num_groups);
+RTC_NOINIT_ATTR uint32_t LocalLights::rtc_levels_[RTC_LEVELS_SIZE];
+RTC_NOINIT_ATTR uint32_t LocalLights::rtc_crc_;
 
-RTC_NOINIT_ATTR uint32_t Lights::rtc_levels_[RTC_LEVELS_SIZE];
-RTC_NOINIT_ATTR uint32_t Lights::rtc_crc_;
-
-Lights::Lights(Network &network, const Config &config)
+LocalLights::LocalLights(Network &network, const Config &config)
 		: network_(network), config_(config) {
 	levels_.fill(Dali::LEVEL_NO_CHANGE);
 	group_levels_.fill(Dali::LEVEL_NO_CHANGE);
@@ -50,15 +49,15 @@ Lights::Lights(Network &network, const Config &config)
 	republish_presets_.insert(RESERVED_PRESET_CUSTOM);
 }
 
-void Lights::setup() {
+void LocalLights::setup() {
 	load_rtc_state();
 }
 
-void Lights::set_dali(Dali &dali) {
+void LocalLights::set_dali(Dali &dali) {
 	dali_ = &dali;
 }
 
-void Lights::loop() {
+void LocalLights::loop() {
 	if (startup_complete_ && network_.connected()) {
 		Dali::addresses_t lights;
 
@@ -70,13 +69,13 @@ void Lights::loop() {
 	}
 }
 
-void Lights::startup_complete(bool state) {
+void LocalLights::startup_complete(bool state) {
 	std::lock_guard lock{publish_mutex_};
 
 	startup_complete_ = state;
 }
 
-std::string Lights::rtc_boot_memory() {
+std::string LocalLights::rtc_boot_memory() {
 	std::vector<char> buffer(64);
 
 	snprintf(buffer.data(), buffer.size(), "%p+%zu, %p+%zu",
@@ -86,11 +85,11 @@ std::string Lights::rtc_boot_memory() {
 	return {buffer.data()};
 }
 
-BootRTCStatus Lights::rtc_boot_status() const {
+BootRTCStatus LocalLights::rtc_boot_status() const {
 	return boot_rtc_;
 }
 
-void Lights::address_config_changed() {
+void LocalLights::address_config_changed() {
 	std::lock_guard publish_lock{publish_mutex_};
 	auto groups = config_.group_names();
 
@@ -102,13 +101,13 @@ void Lights::address_config_changed() {
 	group_level_addresses_ &= addresses;
 }
 
-void Lights::address_config_changed(const std::string &group) {
+void LocalLights::address_config_changed(const std::string &group) {
 	std::lock_guard lock{publish_mutex_};
 
 	republish_groups_.insert(group);
 }
 
-LightsState Lights::get_state() const {
+LightsState LocalLights::get_state() const {
 	std::lock_guard lock{lights_mutex_};
 
 	return {
@@ -125,7 +124,7 @@ LightsState Lights::get_state() const {
 	};
 }
 
-void Lights::completed_force_refresh(unsigned int light_id) const {
+void LocalLights::completed_force_refresh(unsigned int light_id) const {
 	if (light_id >= force_refresh_count_.size()) {
 		return;
 	}
@@ -139,15 +138,15 @@ void Lights::completed_force_refresh(unsigned int light_id) const {
 	force_refresh_[light_id] = force_refresh_count_[light_id] > 0;
 }
 
-bool Lights::is_idle() {
+bool LocalLights::is_idle() {
 	return esp_timer_get_time() - last_activity_us_ >= IDLE_US;
 }
 
-uint32_t Lights::rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels) {
+uint32_t LocalLights::rtc_crc(const std::array<uint32_t,RTC_LEVELS_SIZE> &levels) {
 	return esp_crc32_le(0, reinterpret_cast<const uint8_t *>(&levels), sizeof(levels)) ^ RTC_MAGIC;
 }
 
-void Lights::load_rtc_state() {
+void LocalLights::load_rtc_state() {
 	ESP_LOGE(TAG, "RTC state at %s", rtc_boot_memory().c_str());
 
 	if (esp_reset_reason() == ESP_RST_POWERON) {
@@ -179,7 +178,7 @@ void Lights::load_rtc_state() {
 	}
 }
 
-void Lights::save_rtc_state() {
+void LocalLights::save_rtc_state() {
 	std::array<uint32_t,RTC_LEVELS_SIZE> levels{};
 
 	for (unsigned int i = 0; i < levels_.size(); i++) {
@@ -193,7 +192,7 @@ void Lights::save_rtc_state() {
 	rtc_crc_ = rtc_crc(levels);
 }
 
-void Lights::select_preset(std::string name, const std::string &light_ids,
+void LocalLights::select_preset(std::string name, const std::string &light_ids,
 		bool internal) {
 	bool idle_only;
 	const auto lights = config_.parse_light_ids(light_ids, idle_only);
@@ -201,14 +200,14 @@ void Lights::select_preset(std::string name, const std::string &light_ids,
 	select_preset(name, lights, idle_only, internal);
 }
 
-void Lights::select_preset(std::string name,
+void LocalLights::select_preset(std::string name,
 		const std::vector<std::string> &groups, bool internal) {
 	const auto lights = config_.parse_groups(groups);
 
 	select_preset(name, lights, false, internal);
 }
 
-void Lights::select_preset(std::string name, Dali::addresses_t lights,
+void LocalLights::select_preset(std::string name, Dali::addresses_t lights,
 		bool idle_only, bool internal) {
 	const auto addresses = config_.get_addresses();
 	std::lock_guard publish_lock{publish_mutex_};
@@ -284,7 +283,7 @@ void Lights::select_preset(std::string name, Dali::addresses_t lights,
 	}
 }
 
-void Lights::set_level(const std::string &light_ids, long level) {
+void LocalLights::set_level(const std::string &light_ids, long level) {
 	if (level < 0 || level > MAX_LEVEL) {
 		return;
 	}
@@ -332,7 +331,7 @@ void Lights::set_level(const std::string &light_ids, long level) {
 	}
 }
 
-void Lights::set_power(const Dali::addresses_t &lights, bool on) {
+void LocalLights::set_power(const Dali::addresses_t &lights, bool on) {
 	std::lock_guard lock{lights_mutex_};
 
 	power_known_ |= lights;
@@ -372,7 +371,7 @@ void Lights::set_power(const Dali::addresses_t &lights, bool on) {
 	}
 }
 
-void Lights::dim_adjust(unsigned int dimmer_id, long level) {
+void LocalLights::dim_adjust(unsigned int dimmer_id, long level) {
 	if (dimmer_id >= NUM_DIMMERS) {
 		return;
 	}
@@ -383,11 +382,11 @@ void Lights::dim_adjust(unsigned int dimmer_id, long level) {
 	}
 }
 
-void Lights::dim_adjust(DimmerMode mode, const std::string &groups, long level) {
+void LocalLights::dim_adjust(DimmerMode mode, const std::string &groups, long level) {
 	dim_adjust(config_.make_dimmer(mode, groups), level);
 }
 
-bool Lights::dim_adjust(DimmerConfig &&dimmer_config, long level) {
+bool LocalLights::dim_adjust(DimmerConfig &&dimmer_config, long level) {
 	if (level < -(long)MAX_LEVEL || level > (long)MAX_LEVEL) {
 		return false;
 	}
@@ -508,7 +507,7 @@ bool Lights::dim_adjust(DimmerConfig &&dimmer_config, long level) {
 	return changed;
 }
 
-void Lights::request_group_sync() {
+void LocalLights::request_group_sync() {
 	std::lock_guard lock{lights_mutex_};
 
 	group_sync_.set();
@@ -520,7 +519,7 @@ void Lights::request_group_sync() {
 	}
 }
 
-void Lights::request_group_sync(const std::string &group) {
+void LocalLights::request_group_sync(const std::string &group) {
 	std::lock_guard lock{lights_mutex_};
 	auto id = config_.get_group_id(group);
 
@@ -535,7 +534,7 @@ void Lights::request_group_sync(const std::string &group) {
 	}
 }
 
-void Lights::completed_group_sync(Dali::group_t group) const {
+void LocalLights::completed_group_sync(Dali::group_t group) const {
 	std::lock_guard lock{lights_mutex_};
 
 	if (group < group_sync_.size()) {
@@ -547,7 +546,7 @@ void Lights::completed_group_sync(Dali::group_t group) const {
 	}
 }
 
-void Lights::request_broadcast_power_on_level() {
+void LocalLights::request_broadcast_power_on_level() {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_power_on_level_ = true;
@@ -559,7 +558,7 @@ void Lights::request_broadcast_power_on_level() {
 	}
 }
 
-void Lights::completed_broadcast_power_on_level() const {
+void LocalLights::completed_broadcast_power_on_level() const {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_power_on_level_ = false;
@@ -567,7 +566,7 @@ void Lights::completed_broadcast_power_on_level() const {
 	network_.report(TAG, "Completed broadcast to configure power on level");
 }
 
-void Lights::request_broadcast_system_failure_level() {
+void LocalLights::request_broadcast_system_failure_level() {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_system_failure_level_ = true;
@@ -579,7 +578,7 @@ void Lights::request_broadcast_system_failure_level() {
 	}
 }
 
-void Lights::completed_broadcast_system_failure_level() const {
+void LocalLights::completed_broadcast_system_failure_level() const {
 	std::lock_guard lock{lights_mutex_};
 
 	broadcast_system_failure_level_ = false;
@@ -587,7 +586,7 @@ void Lights::completed_broadcast_system_failure_level() const {
 	network_.report(TAG, "Completed broadcast to configure system failure level");
 }
 
-void Lights::clear_group_levels(const Dali::addresses_t &lights) {
+void LocalLights::clear_group_levels(const Dali::addresses_t &lights) {
 	Dali::addresses_t clear_lights{lights};
 
 	/* Clear group level when setting individual light levels */
@@ -607,7 +606,8 @@ void Lights::clear_group_levels(const Dali::addresses_t &lights) {
 	group_level_addresses_ &= ~clear_lights;
 }
 
-void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time_us) {
+void LocalLights::report_dimmed_levels(const Dali::addresses_t &lights,
+		uint64_t time_us) {
 	std::lock_guard lock{lights_mutex_};
 	Dali::addresses_t dimmed_lights;
 	Dali::level_fast_t min_level = MAX_LEVEL;
@@ -634,7 +634,7 @@ void Lights::report_dimmed_levels(const Dali::addresses_t &lights, uint64_t time
 	}
 }
 
-void Lights::clear_dimmed_levels(const Dali::addresses_t &lights) {
+void LocalLights::clear_dimmed_levels(const Dali::addresses_t &lights) {
 	for (unsigned int i = 0; i < lights.size(); i++) {
 		if (lights[i]) {
 			dim_time_us_[i] = 0;
@@ -642,7 +642,7 @@ void Lights::clear_dimmed_levels(const Dali::addresses_t &lights) {
 	}
 }
 
-void Lights::publish_active_presets() {
+void LocalLights::publish_active_presets() {
 	std::lock_guard publish_lock{publish_mutex_};
 	bool force = (!last_publish_active_us_ || esp_timer_get_time() - last_publish_active_us_ >= ONE_M);
 
@@ -696,7 +696,7 @@ void Lights::publish_active_presets() {
 	}
 }
 
-void Lights::publish_levels(bool force) {
+void LocalLights::publish_levels(bool force) {
 	std::lock_guard lock{lights_mutex_};
 
 	if (!force && last_publish_levels_us_

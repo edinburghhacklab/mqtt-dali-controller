@@ -21,6 +21,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 bool long_from_string(const std::string &text, long &value) {
 	if (text.empty()) {
@@ -68,4 +69,18 @@ bool ulonglong_from_string(const std::string &text, unsigned long long &value) {
 	}
 
 	return true;
+}
+
+std::string vector_text(const std::vector<std::string> &vector) {
+	std::string text;
+
+	for (const auto &item : vector) {
+		if (!text.empty()) {
+			text += ",";
+		}
+
+		text += item;
+	}
+
+	return text;
 }

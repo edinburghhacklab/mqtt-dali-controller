@@ -27,7 +27,7 @@
 #include "thread.h"
 
 class Config;
-class Lights;
+class LocalLights;
 
 class DaliStats {
 public:
@@ -60,7 +60,7 @@ public:
 	using addresses_t = std::bitset<num_addresses>;
 	using groups_t = std::bitset<num_groups>;
 
-	Dali(const Config &config, const Lights &lights);
+	Dali(const Config &config, const LocalLights &lights);
 
 	void setup();
 	void start();
@@ -198,7 +198,7 @@ private:
 	bool tx_set_system_failure_level_from_dtr();
 
 	const Config &config_;
-	const Lights &lights_;
+	const LocalLights &lights_;
 	rmt_obj_t *rmt_{nullptr};
 	std::array<level_fast_t,num_addresses> tx_levels_{};
 	std::array<level_fast_t,num_groups> tx_group_levels_{};

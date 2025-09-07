@@ -30,7 +30,7 @@
 #include <string>
 
 #include "dali.h"
-#include "lights.h"
+#include "local_lights.h"
 #include "network.h"
 #include "switches.h"
 #include "util.h"
@@ -40,7 +40,7 @@ extern const uint8_t x509_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
 
 static constexpr auto &FS = LittleFS;
 
-UI::UI(std::mutex &file_mutex, Network &network, Lights &lights)
+UI::UI(std::mutex &file_mutex, Network &network, LocalLights *lights)
 		: network_(network), lights_(lights), file_mutex_(file_mutex) {
 }
 
@@ -100,11 +100,13 @@ void UI::publish_boot() {
 	network_.publish(topic + "/reset_reason/1", std::to_string(rtc_get_reset_reason(1)), true);
 	network_.publish(topic + "/wakeup_cause", std::to_string(rtc_get_wakeup_cause()), true);
 
-	network_.publish(topic + "/lights",
-		Lights::rtc_boot_memory() + " -> " + boot_rtc_status_string(lights_.rtc_boot_status()), true);
+	if (lights_) {
+		network_.publish(topic + "/lights", LocalLights::rtc_boot_memory()
+			+ " -> " + boot_rtc_status_string(lights_->rtc_boot_status()), true);
+	}
 	if (switches_) {
-		network_.publish(topic + "/switches",
-			Switches::rtc_boot_memory() + " -> " + boot_rtc_status_string(switches_->rtc_boot_status()), true);
+		network_.publish(topic + "/switches", Switches::rtc_boot_memory()
+			+ " -> " + boot_rtc_status_string(switches_->rtc_boot_status()), true);
 	}
 }
 

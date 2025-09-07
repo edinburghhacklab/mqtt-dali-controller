@@ -30,6 +30,11 @@ Rotary encoders for dimming are on the following GPIOs (active low):
 Copy `src/fixed_config.h.example` to `src/fixed_config.h` to configure the WiFi
 network, MQTT hostname and MQTT topic (e.g. `dali`).
 
+The device can either be local by setting `MQTT_REMOTE_TOPIC` to `nullptr` or
+remote set `MQTT_REMOTE_TOPIC` to the other device that should be remotely
+controlled. Remote controllers don't have configuration for lights, groups,
+switches or presets.
+
 ### References
 
 * [Digitally Addressable Lighting Interface (DALI) Communication](https://ww1.microchip.com/downloads/en/AppNotes/01465A.pdf)

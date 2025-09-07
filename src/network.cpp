@@ -68,7 +68,8 @@ void Network::subscribe(const std::string &topic) {
 	mqtt_.subscribe(topic.c_str());
 }
 
-void Network::publish(const std::string &topic, const std::string &payload, bool retain) {
+void Network::publish(const std::string &topic, const std::string &payload,
+		bool retain, bool immediate) {
 	Message message;
 	bool ok = message.write(topic, payload, retain);
 
@@ -76,6 +77,11 @@ void Network::publish(const std::string &topic, const std::string &payload, bool
 
 	if (!ok) {
 		oversized_messages_++;
+		return;
+	}
+
+	if (immediate) {
+		mqtt_.publish(topic.c_str(), payload.c_str(), retain);
 		return;
 	}
 
@@ -93,7 +99,7 @@ void Network::send_queued_messages() {
 	}
 
 	std::unique_lock lock{messages_mutex_};
-	size_t count = message_queue_.size() / SEND_QUEUE_DIVISOR + 1;
+	size_t count = FixedConfig::isLocal() ? (message_queue_.size() / SEND_QUEUE_DIVISOR + 1) : 1;
 	size_t dropped = dropped_messages_;
 	size_t oversized = oversized_messages_;
 

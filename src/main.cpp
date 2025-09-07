@@ -29,7 +29,9 @@
 #include "dali.h"
 #include "config.h"
 #include "lights.h"
+#include "local_lights.h"
 #include "network.h"
+#include "remote_lights.h"
 #include "switches.h"
 #include "ui.h"
 #include "util.h"
@@ -37,6 +39,9 @@
 static constexpr const char *TAG = "main";
 
 std::string FixedConfig::mqtt_topic_str{FixedConfig::MQTT_TOPIC};
+std::string FixedConfig::mqtt_remote_topic_str{
+	FixedConfig::MQTT_REMOTE_TOPIC != nullptr
+		? std::string{FixedConfig::MQTT_REMOTE_TOPIC} + "/x" : ""};
 
 /**
  * LittleFS is NOT thread-safe. Lock this global mutex when accessing the
@@ -47,8 +52,11 @@ static std::mutex file_mutex;
 static Network network;
 static Selector selector;
 static Config config{file_mutex, network, selector};
-static Lights lights{network, config};
-static UI ui{file_mutex, network, lights};
+static LocalLights local_lights{network, config};
+static RemoteLights remote_lights{network, config};
+static Lights &lights = FixedConfig::isLocal()
+	? static_cast<Lights&>(local_lights) : static_cast<Lights&>(remote_lights);
+static UI ui{file_mutex, network, FixedConfig::isLocal() ? &local_lights : nullptr};
 static API *api{nullptr};
 static bool startup_watchdog{false};
 static bool startup_watchdog_failed{false};
@@ -89,22 +97,30 @@ void setup() {
 	Switches &switches = *new Switches{network, config, lights};
 	Buttons &buttons = *new Buttons{config, lights};
 	Dimmers &dimmers = *new Dimmers{network, config, lights};
-	Dali &dali = *new Dali{config, lights};
+	Dali &dali = *new Dali{config, local_lights};
 	api = new API{file_mutex, network, config, dali, dimmers, lights, ui};
 
-	dali.setup();
+	if (FixedConfig::isLocal()) {
+		dali.setup();
+	}
 	selector.setup();
 	config.setup();
-	lights.setup();
-	switches.setup();
+	if (FixedConfig::isLocal()) {
+		local_lights.setup();
+		switches.setup();
+	}
 	buttons.setup();
 	dimmers.setup();
-	dali.start();
+	if (FixedConfig::isLocal()) {
+		dali.start();
+	}
 	ui.setup();
 
-	lights.set_dali(dali);
-	ui.set_dali(dali);
-	ui.set_switches(switches);
+	if (FixedConfig::isLocal()) {
+		local_lights.set_dali(dali);
+		ui.set_dali(dali);
+		ui.set_switches(switches);
+	}
 
 	network.setup(std::bind(&API::connected, api),
 		std::bind(&API::receive, api, _1, _2));
@@ -130,7 +146,9 @@ void loop() {
 		}
 	}
 
-	lights.loop();
+	if (FixedConfig::isLocal()) {
+		local_lights.loop();
+	}
 	ui.loop();
 	network.loop();
 	config.loop();

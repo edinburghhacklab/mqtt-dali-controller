@@ -22,6 +22,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
 
 static constexpr uint64_t ONE_S = 1000 * 1000ULL;
 static constexpr uint64_t ONE_M = 60 * ONE_S;
@@ -30,6 +31,7 @@ static constexpr uint64_t FIVE_M = 5 * ONE_M;
 bool long_from_string(const std::string &text, long &value);
 bool ulong_from_string(const std::string &text, unsigned long &value);
 bool ulonglong_from_string(const std::string &text, unsigned long long &value);
+std::string vector_text(const std::vector<std::string> &vector);
 
 template<typename T, size_t size>
 static inline std::string null_terminated_string(T(&data)[size]) {
@@ -63,6 +65,10 @@ public:
 	static inline int mqttPort() { return MQTT_PORT; }
 	static inline const std::string_view mqttTopic() { return mqtt_topic_str; }
 	static std::string mqttTopic(const char *append) { return mqtt_topic_str + append; }
+	static inline const std::string& mqttRemoteTopic() { return mqtt_remote_topic_str; }
+
+	static inline bool isLocal() { return MQTT_REMOTE_TOPIC == nullptr; }
+	static inline bool isRemote() { return MQTT_REMOTE_TOPIC != nullptr; }
 
 	static inline bool hasChannel() { return IRC_CHANNEL[0]; }
 	static inline const char *ircChannel() { return IRC_CHANNEL; }
@@ -71,6 +77,7 @@ public:
 
 private:
 	static std::string mqtt_topic_str;
+	static std::string mqtt_remote_topic_str;
 
 #if __has_include("fixed_config.h")
 # include "fixed_config.h"

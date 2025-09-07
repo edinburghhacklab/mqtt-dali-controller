@@ -67,20 +67,6 @@ static std::string quoted_string(const std::string &text) {
 	}
 }
 
-static std::string vector_text(const std::vector<std::string> &vector) {
-	std::string text;
-
-	for (const auto &item : vector) {
-		if (!text.empty()) {
-			text += ",";
-		}
-
-		text += item;
-	}
-
-	return text;
-}
-
 static bool readText(cbor::Reader &reader, std::string &text, size_t max_length) {
 	uint64_t length;
 	bool indefinite;
@@ -347,17 +333,17 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			return false;
 		}
 
-		if (key == "lights") {
+		if (key == "lights" && FixedConfig::isLocal()) {
 			if (!read_config_lights(reader, data_.lights)) {
 				return false;
 			}
 
 			CFG_LOG(TAG, "Lights = %s", Config::addresses_text(data_.lights).c_str());
-		} else if (key == "groups") {
+		} else if (key == "groups" && FixedConfig::isLocal()) {
 			if (!read_config_groups(reader)) {
 				return false;
 			}
-		} else if (key == "switches") {
+		} else if (key == "switches" && FixedConfig::isLocal()) {
 			if (!read_config_switches(reader)) {
 				return false;
 			}
@@ -373,11 +359,11 @@ bool ConfigFile::read_config(cbor::Reader &reader) {
 			if (!read_config_selectors(reader)) {
 				return false;
 			}
-		} else if (key == "presets") {
+		} else if (key == "presets" && FixedConfig::isLocal()) {
 			if (!read_config_presets(reader)) {
 				return false;
 			}
-		} else if (key == "order") {
+		} else if (key == "order" && FixedConfig::isLocal()) {
 			if (!read_config_order(reader)) {
 				return false;
 			}
@@ -1110,45 +1096,47 @@ bool ConfigFile::write_config(const std::string &filename) const {
 }
 
 void ConfigFile::write_config(cbor::Writer &writer) const {
-	writer.beginMap(8);
+	writer.beginMap(FixedConfig::isLocal() ? 8 : 3);
 
-	writeText(writer, "lights");
-	writer.beginArray(data_.lights.size());
-	for (unsigned int i = 0; i < data_.lights.size(); i++) {
-		writer.writeBoolean(data_.lights[i]);
-	}
-
-	writeText(writer, "groups");
-	writer.beginArray(data_.groups_by_name.size());
-	for (const auto &group : data_.groups_by_name) {
-		writer.beginMap(3);
-
-		writeText(writer, "name");
-		writeText(writer, group.first);
-
-		writeText(writer, "id");
-		writer.writeUnsignedInt(group.second.id);
-
+	if (FixedConfig::isLocal()) {
 		writeText(writer, "lights");
-		writer.beginArray(group.second.addresses.size());
-		for (unsigned int i = 0; i < group.second.addresses.size(); i++) {
-			writer.writeBoolean(group.second.addresses[i]);
+		writer.beginArray(data_.lights.size());
+		for (unsigned int i = 0; i < data_.lights.size(); i++) {
+			writer.writeBoolean(data_.lights[i]);
 		}
-	}
 
-	writeText(writer, "switches");
-	writer.beginArray(NUM_SWITCHES);
-	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		writer.beginMap(3);
+		writeText(writer, "groups");
+		writer.beginArray(data_.groups_by_name.size());
+		for (const auto &group : data_.groups_by_name) {
+			writer.beginMap(3);
 
-		writeText(writer, "name");
-		writeText(writer, data_.switches[i].name);
+			writeText(writer, "name");
+			writeText(writer, group.first);
 
-		writeText(writer, "group");
-		writeText(writer, data_.switches[i].group);
+			writeText(writer, "id");
+			writer.writeUnsignedInt(group.second.id);
 
-		writeText(writer, "preset");
-		writeText(writer, data_.switches[i].preset);
+			writeText(writer, "lights");
+			writer.beginArray(group.second.addresses.size());
+			for (unsigned int i = 0; i < group.second.addresses.size(); i++) {
+				writer.writeBoolean(group.second.addresses[i]);
+			}
+		}
+
+		writeText(writer, "switches");
+		writer.beginArray(NUM_SWITCHES);
+		for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+			writer.beginMap(3);
+
+			writeText(writer, "name");
+			writeText(writer, data_.switches[i].name);
+
+			writeText(writer, "group");
+			writeText(writer, data_.switches[i].group);
+
+			writeText(writer, "preset");
+			writeText(writer, data_.switches[i].preset);
+		}
 	}
 
 	writeText(writer, "buttons");
@@ -1199,51 +1187,55 @@ void ConfigFile::write_config(cbor::Writer &writer) const {
 		}
 	}
 
-	writeText(writer, "presets");
-	writer.beginArray(data_.presets.size());
-	for (const auto &preset : data_.presets) {
-		writer.beginMap(2);
+	if (FixedConfig::isLocal) {
+		writeText(writer, "presets");
+		writer.beginArray(data_.presets.size());
+		for (const auto &preset : data_.presets) {
+			writer.beginMap(2);
 
-		writeText(writer, "name");
-		writeText(writer, preset.first);
+			writeText(writer, "name");
+			writeText(writer, preset.first);
 
-		writeText(writer, "levels");
-		writer.beginArray(preset.second.size());
-		for (unsigned int i = 0; i < preset.second.size(); i++) {
-			if (preset.second[i] == Dali::LEVEL_NO_CHANGE) {
-				writer.writeInt(Config::LEVEL_NO_CHANGE);
-			} else {
-				writer.writeInt(preset.second[i]);
+			writeText(writer, "levels");
+			writer.beginArray(preset.second.size());
+			for (unsigned int i = 0; i < preset.second.size(); i++) {
+				if (preset.second[i] == Dali::LEVEL_NO_CHANGE) {
+					writer.writeInt(Config::LEVEL_NO_CHANGE);
+				} else {
+					writer.writeInt(preset.second[i]);
+				}
 			}
 		}
-	}
 
-	writeText(writer, "order");
-	writer.beginArray(data_.ordered.size());
-	for (const auto &preset : data_.ordered) {
-		writeText(writer, preset);
+		writeText(writer, "order");
+		writer.beginArray(data_.ordered.size());
+		for (const auto &preset : data_.ordered) {
+			writeText(writer, preset);
+		}
 	}
 }
 
 void Config::publish_config() const {
 	std::lock_guard lock{data_mutex_};
 
-	network_.publish(FixedConfig::mqttTopic("/addresses"),
-		addresses_text(current_.lights), true);
+	if (FixedConfig::isLocal()) {
+		network_.publish(FixedConfig::mqttTopic("/addresses"),
+			addresses_text(current_.lights), true);
 
-	for (const auto &group : current_.groups_by_name) {
-		network_.publish(FixedConfig::mqttTopic("/group/") + group.first,
-			addresses_text(group.second.addresses), true);
-	}
+		for (const auto &group : current_.groups_by_name) {
+			network_.publish(FixedConfig::mqttTopic("/group/") + group.first,
+				addresses_text(group.second.addresses), true);
+		}
 
-	publish_group_ids();
+		publish_group_ids();
 
-	for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
-		auto switch_prefix = FixedConfig::mqttTopic("/switch/") + std::to_string(i);
+		for (unsigned int i = 0; i < NUM_SWITCHES; i++) {
+			auto switch_prefix = FixedConfig::mqttTopic("/switch/") + std::to_string(i);
 
-		network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
-		network_.publish(switch_prefix + "/group", current_.switches[i].group, true);
-		network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
+			network_.publish(switch_prefix + "/name", current_.switches[i].name, true);
+			network_.publish(switch_prefix + "/group", current_.switches[i].group, true);
+			network_.publish(switch_prefix + "/preset", current_.switches[i].preset, true);
+		}
 	}
 
 	for (unsigned int i = 0; i < NUM_BUTTONS; i++) {
@@ -1274,12 +1266,14 @@ void Config::publish_config() const {
 				vector_text(current_.selector_groups[i]), true);
 	}
 
-	for (const auto &preset : current_.presets) {
-		publish_preset(preset.first, preset.second);
-	}
+	if (FixedConfig::isLocal()) {
+		for (const auto &preset : current_.presets) {
+			publish_preset(preset.first, preset.second);
+		}
 
-	network_.publish(FixedConfig::mqttTopic("/preset/order"),
-		vector_text(current_.ordered), true);
+		network_.publish(FixedConfig::mqttTopic("/preset/order"),
+			vector_text(current_.ordered), true);
+	}
 }
 
 void Config::publish_group_ids() const {
@@ -1682,6 +1676,16 @@ DimmerConfig Config::get_dimmer(unsigned int dimmer_id) const {
 			.group_addresses{},
 			.all = false,
 		};
+	}
+}
+
+std::vector<std::string> Config::dimmer_active_groups(unsigned int dimmer_id) const {
+	std::lock_guard lock{data_mutex_};
+
+	if (dimmer_id < NUM_DIMMERS) {
+		return selector_group(current_.dimmers[dimmer_id].groups);
+	} else {
+		return {};
 	}
 }
 

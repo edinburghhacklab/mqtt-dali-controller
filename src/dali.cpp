@@ -31,7 +31,7 @@
 #include <mutex>
 
 #include "config.h"
-#include "lights.h"
+#include "local_lights.h"
 #include "util.h"
 
 /* github:espressif/arduino-esp32 cores/esp32/esp32-hal-rmt.h v2.0.17 */
@@ -56,7 +56,7 @@ static constexpr unsigned int TX_GPIO = 21;
 
 #define DALI_LOG ESP_LOGD
 
-Dali::Dali(const Config &config, const Lights &lights)
+Dali::Dali(const Config &config, const LocalLights &lights)
 		: WakeupThread("dali", true), config_(config),
 		lights_(lights) {
 	tx_levels_.fill(LEVEL_NO_CHANGE);

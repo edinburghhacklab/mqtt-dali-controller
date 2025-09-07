@@ -80,18 +80,21 @@ void API::connected() {
 	startup_complete(false);
 
 	network_.subscribe(FixedConfig::mqttTopic("/startup_complete"));
-	network_.subscribe(FixedConfig::mqttTopic("/x"));
+	if (FixedConfig::isLocal()) {
+		network_.subscribe(FixedConfig::mqttTopic("/x"));
+	}
 	network_.subscribe(FixedConfig::mqttTopic("/reboot"));
 	network_.subscribe(FixedConfig::mqttTopic("/reload"));
 	network_.subscribe(FixedConfig::mqttTopic("/status"));
-	network_.subscribe(FixedConfig::mqttTopic("/idle/"));
 	network_.subscribe(FixedConfig::mqttTopic("/ota/+"));
-	network_.subscribe(FixedConfig::mqttTopic("/addresses"));
-	network_.subscribe(FixedConfig::mqttTopic("/group/+"));
-	network_.subscribe(FixedConfig::mqttTopic("/groups/sync"));
-	network_.subscribe(FixedConfig::mqttTopic("/switch/+/group"));
-	network_.subscribe(FixedConfig::mqttTopic("/switch/+/name"));
-	network_.subscribe(FixedConfig::mqttTopic("/switch/+/preset"));
+	if (FixedConfig::isLocal()) {
+		network_.subscribe(FixedConfig::mqttTopic("/addresses"));
+		network_.subscribe(FixedConfig::mqttTopic("/group/+"));
+		network_.subscribe(FixedConfig::mqttTopic("/groups/sync"));
+		network_.subscribe(FixedConfig::mqttTopic("/switch/+/group"));
+		network_.subscribe(FixedConfig::mqttTopic("/switch/+/name"));
+		network_.subscribe(FixedConfig::mqttTopic("/switch/+/preset"));
+	}
 	network_.subscribe(FixedConfig::mqttTopic("/button/+/groups"));
 	network_.subscribe(FixedConfig::mqttTopic("/button/+/preset"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/groups"));
@@ -100,11 +103,13 @@ void API::connected() {
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/mode"));
 	network_.subscribe(FixedConfig::mqttTopic("/dimmer/+/get_debug"));
 	network_.subscribe(FixedConfig::mqttTopic("/selector/+/groups"));
-	network_.subscribe(FixedConfig::mqttTopic("/preset/+"));
-	network_.subscribe(FixedConfig::mqttTopic("/preset/+/+"));
-	network_.subscribe(FixedConfig::mqttTopic("/set/+"));
-	network_.subscribe(FixedConfig::mqttTopic("/command/store/power_on_level"));
-	network_.subscribe(FixedConfig::mqttTopic("/command/store/system_failure_level"));
+	if (FixedConfig::isLocal()) {
+		network_.subscribe(FixedConfig::mqttTopic("/preset/+"));
+		network_.subscribe(FixedConfig::mqttTopic("/preset/+/+"));
+		network_.subscribe(FixedConfig::mqttTopic("/set/+"));
+		network_.subscribe(FixedConfig::mqttTopic("/command/store/power_on_level"));
+		network_.subscribe(FixedConfig::mqttTopic("/command/store/system_failure_level"));
+	}
 	network_.subscribe("meta/mqtt-agents/poll");
 	network_.publish("meta/mqtt-agents/announce", network_.device_id());
 	network_.publish(FixedConfig::mqttTopic("/startup_complete"), "");
@@ -149,6 +154,22 @@ void API::receive(std::string &&topic, std::string &&payload) {
 						&& payload_parser.get_string(groups)) {
 					lights_.dim_adjust(command == "dg" ? DimmerMode::GROUP
 						: DimmerMode::INDIVIDUAL, groups, value);
+				}
+			} else if (command == "pt") {
+				std::string preset_name;
+				std::string light_ids;
+
+				if (payload_parser.get_string(preset_name)
+						&& payload_parser.get_string(light_ids)) {
+					lights_.select_preset(preset_name, light_ids);
+				}
+			} else if (command == "sl") {
+				std::string light_ids;
+				long value;
+
+				if (payload_parser.get_string(light_ids)
+						&& payload_parser.get_long(value)) {
+					lights_.set_level(light_ids, value);
 				}
 			}
 		}

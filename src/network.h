@@ -65,7 +65,8 @@ public:
 	inline bool connected() { return wifi_up_ && mqtt_.connected(); }
 	void report(const char *tag, const std::string &message);
 	void subscribe(const std::string &topic);
-	void publish(const std::string &topic, const std::string &payload, bool retain = false);
+	void publish(const std::string &topic, const std::string &payload,
+		bool retain = false, bool immediate = false);
 	void send_queued_messages();
 	size_t received_message_count();
 	size_t sent_message_count();
