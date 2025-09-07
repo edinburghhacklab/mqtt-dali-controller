@@ -31,9 +31,15 @@
 
 static constexpr std::array<gpio_num_t,NUM_BUTTONS> BUTTON_GPIO{{
 	(gpio_num_t)18,
+#if defined(ARDUINO_LOLIN_S3_MINI)
+	(gpio_num_t)36,
+	(gpio_num_t)43,
+	(gpio_num_t)44,
+#else
 	(gpio_num_t)39,
 	(gpio_num_t)41,
 	(gpio_num_t)42,
+#endif
 }};
 
 Buttons::Buttons(const Config &config, Lights &lights)

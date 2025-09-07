@@ -39,6 +39,10 @@ namespace filesystem_cache {
 static constexpr size_t FILESYSTEM_BLOCK_SIZE = 4096;
 static constexpr size_t FILESYSTEM_SIZE = 8 * 1024 * 1024;
 static constexpr size_t FILESYSTEM_CACHE_SIZE = 512 * 1024;
+#elif defined(ARDUINO_LOLIN_S3_MINI)
+static constexpr size_t FILESYSTEM_BLOCK_SIZE = 4096;
+static constexpr size_t FILESYSTEM_SIZE = 8 * 1024 * 1024;
+static constexpr size_t FILESYSTEM_CACHE_SIZE = 512 * 1024;
 #endif
 
 static constexpr size_t FILESYSTEM_BLOCKS = FILESYSTEM_SIZE / FILESYSTEM_BLOCK_SIZE;
