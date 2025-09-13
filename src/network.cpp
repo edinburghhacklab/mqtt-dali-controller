@@ -74,23 +74,19 @@ void Network::publish(const std::string &topic, const std::string &payload,
 	bool ok = message.write(topic, payload, retain);
 
 	std::lock_guard lock{messages_mutex_};
+	auto &queue = immediate ? immediate_message_queue_ : message_queue_;
 
 	if (!ok) {
 		oversized_messages_++;
 		return;
 	}
 
-	if (immediate) {
-		mqtt_.publish(topic.c_str(), payload.c_str(), retain);
-		return;
+	while (queue.size() >= MAX_QUEUED_MESSAGES) {
+		queue.pop_front();
 	}
 
-	while (message_queue_.size() >= MAX_QUEUED_MESSAGES) {
-		message_queue_.pop_front();
-	}
-
-	message_queue_.push_back(std::move(message));
-	maximum_queue_size_ = std::max(maximum_queue_size_, message_queue_.size());
+	queue.push_back(std::move(message));
+	maximum_queue_size_ = std::max(maximum_queue_size_, queue.size());
 }
 
 void Network::send_queued_messages() {
@@ -102,6 +98,12 @@ void Network::send_queued_messages() {
 	size_t count = FixedConfig::isLocal() ? (message_queue_.size() / SEND_QUEUE_DIVISOR + 1) : 1;
 	size_t dropped = dropped_messages_;
 	size_t oversized = oversized_messages_;
+
+	while (!immediate_message_queue_.empty()) {
+		send_messages_.push_back(std::move(immediate_message_queue_.front()));
+		immediate_message_queue_.pop_front();
+		count = 0;
+	}
 
 	while (!message_queue_.empty() && send_messages_.size() < count) {
 		send_messages_.push_back(std::move(message_queue_.front()));

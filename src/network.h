@@ -23,6 +23,7 @@
 #include <WiFi.h>
 
 #include <array>
+#include <atomic>
 #include <deque>
 #include <mutex>
 #include <functional>
@@ -63,6 +64,10 @@ public:
 	void loop();
 	inline std::string device_id() { return device_id_.c_str(); }
 	inline bool connected() { return wifi_up_ && mqtt_.connected(); }
+	inline bool busy() {
+		std::lock_guard lock{messages_mutex_};
+		return !immediate_message_queue_.empty();
+	}
 	void report(const char *tag, const std::string &message);
 	void subscribe(const std::string &topic);
 	void publish(const std::string &topic, const std::string &payload,
@@ -83,13 +88,14 @@ private:
 	WiFiClient client_;
 	PubSubClient mqtt_{client_};
 	uint64_t last_wifi_us_{0};
-	bool wifi_up_{false};
+	std::atomic<bool> wifi_up_{false};
 	uint64_t last_mqtt_us_{0};
 
 	std::function<void()> connected_;
 	std::function<void(std::string &&topic, std::string &&payload)> receive_;
 
 	std::mutex messages_mutex_;
+	std::deque<Message> immediate_message_queue_;
 	std::deque<Message> message_queue_;
 	std::deque<Message> send_messages_;
 	size_t dropped_messages_{0};

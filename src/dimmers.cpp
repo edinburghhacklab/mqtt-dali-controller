@@ -83,6 +83,10 @@ void Dimmers::setup() {
 unsigned long Dimmers::run_tasks() {
 	esp_task_wdt_reset();
 
+	if (network_.busy()) {
+		return 1;
+	}
+
 	for (unsigned int i = 0; i < NUM_DIMMERS; i++) {
 		run_dimmer(i);
 	}
