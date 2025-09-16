@@ -18,8 +18,8 @@ the inverse of the DALI bus. The bus is idle (high) when the signal is low.
 
 The light switches are GPIOs 11, 12, 13 and 14 (active low).
 
-The button GPIOs are 18, 39, 41 and 42 on the LOLIN S3 and 18, 36, 43 and 44 on
-the LOLIN S3 mini.
+The button GPIOs are 18, 39, 41 and 42 (active low) on the LOLIN S3 and 18, 36,
+43 and 44 (active low) on the LOLIN S3 mini.
 
 The selector option GPIOs are 16 and 17 (active low).
 
