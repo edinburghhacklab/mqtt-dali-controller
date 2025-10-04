@@ -175,15 +175,7 @@ void Network::setup(std::function<void()> connected,
 	using namespace std::placeholders;
 
 	WiFi.persistent(false);
-
-	std::string hostname = WiFi.getHostname();
-	auto idx = hostname.find("-");
-	if (idx != std::string::npos) {
-		hostname = FixedConfig::wifiHostname() + hostname.substr(idx);
-		ESP_LOGE(TAG, "Hostname = %s", hostname.c_str());
-		WiFi.setHostname(hostname.c_str());
-	}
-
+	WiFi.setHostname(FixedConfig::wifiHostname());
 	WiFi.setAutoReconnect(false);
 	WiFi.setSleep(false);
 	WiFi.mode(WIFI_STA);
